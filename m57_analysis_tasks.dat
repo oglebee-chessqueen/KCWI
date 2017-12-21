@@ -1,0 +1,7 @@
+List of Experiments/Analysis Techniques for Paper:
+--------------------------------------------------
+1. Temperature per pixel using [OIII](4959 + 5007)/4363 [of data sets that cover this wavelength range]
+
+2. Ion ratio maps (e.g., HeII/HeI, [NI]/[NII], [OIII]/[OII], and ratios of doublet lines (like [NI] 5198/5200))
+
+3. Estimation of dust extinction per pixel? --> read up on techniques in Osterbock book
