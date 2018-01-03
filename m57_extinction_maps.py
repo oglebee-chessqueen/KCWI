@@ -14,6 +14,44 @@ import numpy
 plt.rcParams["font.family"] = "serif"
 
 
+
+def open_fits_err(file,*args):
+	'''
+	Open the vcube fits file.
+	Grab the variance cube + wavelength.
+	*args - if set, then read in different RA, DEC header value
+	'''
+	hdulist = fits.open(file)		# Open the file
+
+	print hdulist.info()				# Print info on the fits file, gill get spatial
+															# pix size and wavelength array
+
+	data = hdulist[0].data		# Define data cube (3D: wave, y, x)
+
+	#~ wv1 = hdulist[0].header['WAVGOOD0']		# First "good" wavelength defined
+	#~ wv2 = hdulist[0].header['WAVGOOD1']		# Last "good" wavelength defined
+	#~ wmid = hdulist[0].header['WAVMID']					# Mid-way wavelength
+	wv0 = hdulist[0].header['CRVAL3']					# wavelength zeropoint
+	wv_interval = hdulist[0].header['CD3_3']		# Defines delta(wave)
+	nwv = numpy.size(data[:,0,0])
+
+	#~ wlo = wmid - (nwv/2.)*wv_interval
+	#~ whi = wmid + (nwv/2.)*wv_interval
+	wvlast = wv0 + nwv*wv_interval
+
+	#allwv = numpy.arange(wlo, whi, wv_interval)	# Defined using known delta(wave)
+																								# and central wavelength
+	# allwv = numpy.arange(w1,w2, (wv2-wv1)/nwv)	# Defined using "good" wavelengths
+																								# and total number of wavelength
+																								# elements
+	all_wv = numpy.arange(wv0, wvlast, wv_interval)		# Defined using known delta(wave) and central wavelength
+	print wv0, wvlast, numpy.size(all_wv)
+
+
+	hdulist.close()
+
+	return data, all_wv
+
 def open_fits(file,*args):
 	'''
 	Open the fits file.
@@ -211,6 +249,8 @@ UnKnown = []
 #~ data2, waves2, ra2, dec2, all_ra2, all_dec2 = open_fits(file2)
 data3, waves3, ra3, dec3, all_ra3, all_dec3 = open_fits(file3)		# data in units erg cm-2 s-1
 data4, waves4, ra4, dec4, all_ra4, all_dec4 = open_fits(file4)		# data in units erg cm-2 s-1
+var3, varwv3 = open_fits_err(vfile3)
+var4, varwv4 = open_fits_err(vfile4)
 
 # Convert all_ra3 to a delta array away from central RA, and do same for DEC
 # Multiply by 360 to convert to arcseconds
@@ -219,51 +259,59 @@ ddec3 = (all_dec3 - dec3) * 3600
 dra4 = (all_ra4 - ra4) * 3600
 ddec4 = (all_dec4 - dec4) * 3600
 
-# Define narrow bands around Hb, Hg
-dw = 3.5
+# Define narrow bands around Hb, Hg, Hd
+dw = 4
 
 data3 = data4
 waves3 = waves4
+var3 = var4
 
 line = HI[1]		# Hgamma
 data_wv1, interval_wv1 = narrowband(line, data3, waves3, dw, "n")
 data_wv1 = data_wv1[1:,:,:]
 interval_wv1 = interval_wv1[1:]
+var_wv1 = var3[interval_wv1,:,:]
 vobs_wv1 = ((waves3[interval_wv1] - line) / line)*c
 #~ data_wv1 = data_wv1/line
-for i in range(0,len(waves3[interval_wv1])):
-	data_wv1[i,:,:] = data_wv1[i,:,:]/waves3[interval_wv1[i]]
+#~ for i in range(0,len(waves3[interval_wv1])):
+	#~ data_wv1[i,:,:] = data_wv1[i,:,:]/waves3[interval_wv1[i]]
 
 line = HI[2]		# Hbeta
 data_wv2, interval_wv2 = narrowband(line, data3, waves3, dw, "n")
-#~ data_wv2 = data_wv2[1:-1,:,:]
-#~ interval_wv2 = interval_wv2[1:-1]
+data_wv2 = data_wv2[1:-1,:,:]
+interval_wv2 = interval_wv2[1:-1]
+var_wv2 = var3[interval_wv2,:,:]
 vobs_wv2 = ((waves3[interval_wv2] - line) / line)*c
 #~ data_wv2 = data_wv2/line
-for i in range(0,len(waves3[interval_wv2])):
-	data_wv2[i,:,:] = data_wv2[i,:,:]/waves3[interval_wv2[i]]
+#~ for i in range(0,len(waves3[interval_wv2])):
+	#~ data_wv2[i,:,:] = data_wv2[i,:,:]/waves3[interval_wv2[i]]
+
 
 line = HI[0]		# Hdelta
 data_wv3, interval_wv3 = narrowband(line, data3, waves3, dw, "n")
 data_wv3 = data_wv3[1:-1,:,:]
 interval_wv3 = interval_wv3[1:-1]
+var_wv3 = numpy.sqrt(var3[interval_wv3,:,:])
 vobs_wv3 = ((waves3[interval_wv3] - line) / line)*c
 #~ data_wv3 = data_wv3/line
-for i in range(0,len(waves3[interval_wv3])):
-	data_wv3[i,:,:] = data_wv3[i,:,:]/waves3[interval_wv3[i]]
+#~ for i in range(0,len(waves3[interval_wv3])):
+	#~ data_wv3[i,:,:] = data_wv3[i,:,:]/waves3[interval_wv3[i]]
 
-#~ print waves3[interval_wv1]
-print vobs_wv2
-print vobs_wv1
-print vobs_wv3
+
 
 
 # Compare
-spectra3 = numpy.sum(data3, axis=(1,2))
-plt.plot(waves3,spectra3,drawstyle='steps-mid',color='blue')
+spectra3 = numpy.sum(data3[:,33:-28,12:-12], axis=(1,2))
+err3 = numpy.sum(numpy.sqrt(var3[:,33:-28,12:-12]), axis=(1,2))
+#~ plt.plot(waves3,spectra3,drawstyle='steps-mid',color='blue')
+plt.errorbar(waves3,spectra3,yerr=err3,drawstyle='steps-mid',
+						 color='blue',ecolor='blue',errorevery=10)
 
-spectra4 = numpy.sum(data4, axis=(1,2))
-plt.plot(waves4,spectra4,drawstyle='steps-mid',color='orange')
+spectra4 = numpy.sum(data4[:,33:-28,12:-12], axis=(1,2))
+err4 = numpy.sum(numpy.sqrt(var4[:,33:-28,12:-12]), axis=(1,2))
+#~ plt.plot(waves4,spectra4,drawstyle='steps-mid',color='orange')
+plt.errorbar(waves4,spectra4,yerr=err4,drawstyle='steps-mid',
+						 color='orange',ecolor='orange',errorevery=10)
 
 plt.plot(waves3[interval_wv2],numpy.sum(data_wv2,axis=(1,2)),'r-',lw=5)
 plt.plot(waves3[interval_wv1],numpy.sum(data_wv1,axis=(1,2)),'r-',lw=5)
@@ -271,6 +319,73 @@ plt.plot(waves3[interval_wv3],numpy.sum(data_wv3,axis=(1,2)),'r-',lw=5)
 plt.xlabel(r'Wavelength ($\AA$)')
 plt.ylabel('Counts')
 #plt.show()
+
+
+
+
+
+fig3 = plt.figure()
+#~ fig3.set_size_inches(18.5, 10.5, forward=True)
+ax3 = fig3.add_subplot(1,3,1)
+ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+#ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
+#~ ax3.set_title(r'H$\gamma$/H$\beta$')
+#~ CS1 = plt.contour(numpy.sum(data_wv1[:,:,:],axis=0), levels,
+									#~ linewidths=lw, colors='b', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+#~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
+									#~ linewidths=lw2, colors='r', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+plt.imshow(numpy.sum(data_wv2[:,30:-25,10:-10],axis=0), origin='lower', #vmin=0.4, vmax=0.5,
+						interpolation="None", cmap='cubehelix',
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+cbar = plt.colorbar()
+cbar.ax.set_ylabel(r'H$\beta$',weight='bold',size='large')
+
+ax3 = fig3.add_subplot(1,3,2)
+ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+#ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
+#~ ax3.set_title(r'H$\delta$/H$\beta$')
+#~ CS1 = plt.contour(numpy.sum(data_wv1[:,:,:],axis=0), levels,
+									#~ linewidths=lw, colors='b', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+#~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
+									#~ linewidths=lw2, colors='r', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+plt.imshow(numpy.sum(data_wv1[:,30:-25,10:-10],axis=0), origin='lower', #vmin=0.2, vmax=0.3,
+						interpolation="None", cmap='cubehelix',
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+
+cbar = plt.colorbar()
+cbar.ax.set_ylabel(r'H$\gamma$',weight='bold',size='large')
+
+ax3 = fig3.add_subplot(1,3,3)
+ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+#ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
+#~ ax3.set_title(r'H$\delta$/H$\beta$')
+#~ CS1 = plt.contour(numpy.sum(data_wv1[:,:,:],axis=0), levels,
+									#~ linewidths=lw, colors='b', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+#~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
+									#~ linewidths=lw2, colors='r', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+plt.imshow(numpy.sum(data_wv3[:,30:-25,10:-10],axis=0), origin='lower', #vmin=0.2, vmax=0.3,
+						interpolation="None", cmap='cubehelix',
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+
+cbar = plt.colorbar()
+cbar.ax.set_ylabel(r'H$\delta$',weight='bold',size='large')
+ax = plt.gca()
+ax.get_xaxis().get_major_formatter().set_useOffset(False)
+ax.get_yaxis().get_major_formatter().set_useOffset(False)
+plt.tight_layout()
+
+
+
+
 
 
 ratio = numpy.sum(data_wv1,axis=0) / numpy.sum(data_wv2,axis=0)
@@ -291,9 +406,9 @@ ax3.set_title(r'H$\gamma$/H$\beta$')
 #~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
 									#~ linewidths=lw2, colors='r', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
-plt.imshow(ratio[33:-28,12:-12], origin='lower', vmin=0.4, vmax=0.5,
+plt.imshow(ratio[30:-25,10:-10], origin='lower', vmin=0.4, vmax=0.5,
 						interpolation="None", cmap='cubehelix',
-						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'H$\gamma$/H$\beta$',weight='bold',size='large')
 
@@ -308,9 +423,9 @@ ax3.set_title(r'H$\delta$/H$\beta$')
 #~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
 									#~ linewidths=lw2, colors='r', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
-plt.imshow(ratio2[33:-28,12:-12], origin='lower', vmin=0.2, vmax=0.3,
+plt.imshow(ratio2[30:-25,10:-10], origin='lower', vmin=0.2, vmax=0.3,	#[33:-28,12:-12]
 						interpolation="None", cmap='cubehelix',
-						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
 
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'H$\delta$/H$\beta$',weight='bold',size='large')
@@ -369,7 +484,7 @@ ax3.set_title(r'c$_{H \gamma /H \beta}$',weight='bold',size='large')
 #~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
 									#~ linewidths=lw2, colors='r', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
-plt.imshow(c_HgHb, origin='lower', vmin=0.0, vmax=0.2,
+plt.imshow(c_HgHb, origin='lower', vmin=0.25, vmax=0.5,
 						interpolation="None", cmap='cubehelix',
 						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
 #~ cbar = plt.colorbar()
@@ -380,21 +495,21 @@ ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large
 ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
 #ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
 ax3.set_title(r'c$_{H \delta /H \beta}$',weight='bold',size='large')
+ax.get_xaxis().get_major_formatter().set_useOffset(False)
+ax.get_yaxis().get_major_formatter().set_useOffset(False)
 #~ CS1 = plt.contour(numpy.sum(data_wv1[:,:,:],axis=0), levels,
 									#~ linewidths=lw, colors='b', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
 #~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
 									#~ linewidths=lw2, colors='r', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
-plt.imshow(c_HdHb, origin='lower', vmin=0.0, vmax=0.2,
+plt.imshow(c_HdHb, origin='lower', vmin=0.25, vmax=0.5,
 						interpolation="None", cmap='cubehelix',
 						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
 
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'c$_{H \beta}$',weight='bold',size='large')
 ax = plt.gca()
-ax.get_xaxis().get_major_formatter().set_useOffset(False)
-ax.get_yaxis().get_major_formatter().set_useOffset(False)
 plt.tight_layout()
 
 
@@ -405,8 +520,14 @@ plt.tight_layout()
 	----------
 		- Correct the orientation of the x-axis (or the orientation of the y-axis elements.
 		- Change d_arcsec to reflect distance from central star.
+
+	...
+	... DONE!!!
+
 '''
 
+ra_star = 283.3962
+dec_star = 33.0292
 
 
 line_ra = dra3[12:-12]
@@ -414,9 +535,6 @@ line_dec = ddec3[33:-28]
 line_dec = line_dec[::-1]
 
 radec_slope = (line_ra[-1] - line_ra[0])/(line_dec[-1] - line_dec[0])
-print radec_slope
-#~ print radec_slope*line_dec
-print line_dec[0]
 d_arcsec = numpy.zeros( len(line_dec) )
 
 line_ra2 = numpy.zeros( len(line_dec) )
@@ -430,18 +548,21 @@ for i in range(0,len(line_ra2)):
 	else:
 		ii += 1
 		line_ra2[i] = line_ra[ii]
+	#~ c_HgHb_line[i] = numpy.median( c_HgHb[i,ii:ii+5] )
+	#~ c_HdHb_line[i] = numpy.median( c_HdHb[i,ii:ii+5] )
 	c_HgHb_line[i] = c_HgHb[i,ii]
 	c_HdHb_line[i] = c_HdHb[i,ii]
-	d_arcsec[i] = numpy.sqrt( (line_ra2[i] - line_ra2[0])**2 + (line_dec[i] - line_dec[0])**2 )
+	d_arcsec[i] = numpy.sqrt( (all_ra3[ii+12] - ra_star)**2 + (all_dec3[i+33] - dec_star)**2 )*3600.
 
 
-print d_arcsec #- line_dec[0]
 
 fig = plt.figure()
 #~ fig3.set_size_inches(18.5, 10.5, forward=True)
 ax3 = fig.add_subplot(1,1,1)
-ax3.set_xlabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+ax3.set_xlabel(r'Distance from Central Star ($^{\prime \prime}$)',weight='bold',size='large')
 ax3.set_ylabel(r'c$_{H \beta}$',weight='bold',size='large')
+ax.get_xaxis().get_major_formatter().set_useOffset(False)
+ax.get_yaxis().get_major_formatter().set_useOffset(False)
 chghb, = plt.plot(d_arcsec[1:-2],c_HgHb_line[1:-2],drawstyle='steps-mid',
 									label=r'H$\gamma$/H$\beta$')
 chdhb, = plt.plot(d_arcsec[1:-2],c_HdHb_line[1:-2],drawstyle='steps-mid',
