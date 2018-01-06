@@ -11,6 +11,7 @@ from astropy.io import fits
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import numpy
+import numpy.polynomial.polynomial as poly
 plt.rcParams["font.family"] = "serif"
 
 
@@ -145,6 +146,23 @@ def open_fits(file,*args):
 	return data, all_wv, ra0_deg, dec0_deg, all_ra, all_dec
 
 
+
+def write_fits(file,data):
+	# First, read-in previous list of events
+	try:
+		hdulist=fits.open(file,mode='update')
+		hdulist[0].data = data
+
+		hdulist.flush()		# Should update file with new events array
+		hdulist.close()
+		print "Updating %s SUCCESS!" % (file)
+
+	except:
+		print "Update to %s FAILED" % (file)
+
+	return
+
+
 def narrowband(line, data, wv, dw, continuum_yn):
 	'''
 	Use to define a data array with limited wavelength coverage around line.
@@ -164,6 +182,69 @@ def narrowband(line, data, wv, dw, continuum_yn):
 		data_line = data[ind_line,:,:]
 
 	return data_line, ind_line
+
+
+def calculate_cHb(data1, data2, I12, f12, ra, dec):
+	'''
+			Use to determine extinction (c_Hb)
+	'''
+	# Define extinction
+	c_Hb = numpy.zeros( [numpy.size(data1[0,:,0]), numpy.size(data1[0,0,:])] )
+
+	# Calculate c_Hb:
+	# 1. find the ratio of the total fluxes of data1 and data2
+	ratio = numpy.sum(data1,axis=0)/numpy.sum(data2,axis=0)
+
+	# 2. Use Osterbock+2006 equation to determine c_Hb
+	c_Hb = (-1./f12)*numpy.log10( (ratio/I12) )
+
+	# 3. Take out all nan's and inf values that are not real
+	c_Hb[numpy.isnan(c_Hb)] = 0
+	c_Hb[numpy.isneginf(c_Hb)] = 0
+	c_Hb[numpy.isposinf(c_Hb)] = 0
+
+	# Plot the resulting image map of c_Hb
+	fig3 = plt.figure()
+	ax2 = fig3.add_subplot(1,1,1)
+	ax = plt.gca()
+	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+	ax2.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+	ax2.set_title(r'c$_{H \beta}$',weight='bold',size='large')
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+	plt.imshow(c_Hb[33:-28,12:-12], origin='lower', vmin=0.25, vmax=0.5,
+						interpolation="None", cmap='cubehelix',
+						extent=[ra[12],ra[-12],dec[33],dec[-28]])#, origin='lower') # inferno - good
+
+	cbar = plt.colorbar()
+	cbar.ax.set_ylabel(r'c$_{H \beta}$',weight='bold',size='large')
+	plt.tight_layout()
+
+
+	return c_Hb
+
+
+def flux_deredden(flux, c_Hb, f12):
+	'''
+		Use c_Hb to de-redden the KCWI data sets.
+	'''
+	# Define new de-reddened flux array
+	flux_dered = numpy.zeros( numpy.shape(flux) )
+	flux_dered_avg = numpy.zeros( numpy.shape(flux) )
+	c_Hb_avg = numpy.median( c_Hb[c_Hb>0.05] )
+	# 1. Correct for "bad regions" by making sure c_Hb does not deviate
+	#			significantly from c_Hb_avg
+	dv = 0.25
+	c_Hb[c_Hb<(c_Hb_avg-dv)] = c_Hb_avg
+	c_Hb[c_Hb>(c_Hb_avg+dv)] = c_Hb_avg
+
+	for l in range(0,numpy.size(flux[:,0,0])):
+		flux_dered[l,:,:] = flux[l,:,:] * 10**( c_Hb*f12[l] )
+		flux_dered_avg[l,:,:] = flux[l,:,:] * 10**( c_Hb_avg*f12[l] )
+
+	return flux_dered, flux_dered_avg
+
 
 
 
@@ -193,6 +274,7 @@ index2=211		# not ready
 index3=212
 index4=213
 
+
 # Use flux-calibrated data cubes
 #~ filename1='kb'+date+'_00%03i_%s.fits' % (index1,int)
 #~ file1=path+dir+date+dir+redux+dir+filename1
@@ -204,6 +286,7 @@ intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)
 file3 = path+dir+date+dir+redux+dir+intfile3
 varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
 vfile3 = path+dir+date+dir+redux+dir+varfile3
+outfile3 = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_extcorr.fits' % (index3,int)
 
 print file3
 
@@ -211,6 +294,7 @@ intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)
 file4 = path+dir+date+dir+redux+dir+intfile4
 varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
 vfile4 = path+dir+date+dir+redux+dir+varfile4
+outfile4 = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_extcorr.fits' % (index4,int)
 
 # Constants:
 c = 3.0e5		# Speed of light: km/s
@@ -243,6 +327,21 @@ KV = [4123, 4163]
 CaV = [3996, 5309]
 UnKnown = []
 
+kcwi_band = numpy.arange(3300,5800,0.5)
+# List of f_lam for standard interstellar extinction curve (using Hb as ref.)
+lam = [5556, 5000, 4861, 4545, 4340, 4167, 4101, 4000, 3846, 3727, 3571]
+f_lam = [-0.16, -0.04, 0.0, 0.09, 0.15, 0.20, 0.22, 0.25, 0.29, 0.33, 0.39]
+# Fit a line through these points, to be able to extrapolate across KCWI bandpass
+coefs = poly.polyfit(lam,f_lam,2)
+ffits = poly.polyval(kcwi_band, coefs)		# all f_lam across kcwi bandpass
+#~ ffit = poly.Polynomial(coefs)
+
+
+#~ plt.plot(lam,f_lam,'ro')
+#~ plt.plot(kcwi_band,ffits,'k--')
+#~ plt.xlabel(r'$\lambda$ ($\AA$)')
+#~ plt.ylabel(r'f($\lambda$) - f(H$\beta$)')
+#~ #plt.show()
 
 # Read in file, get important data from files
 #~ data, waves, ra, dec, all_ra, all_dec = open_fits(file1)
@@ -251,6 +350,8 @@ data3, waves3, ra3, dec3, all_ra3, all_dec3 = open_fits(file3)		# data in units 
 data4, waves4, ra4, dec4, all_ra4, all_dec4 = open_fits(file4)		# data in units erg cm-2 s-1
 var3, varwv3 = open_fits_err(vfile3)
 var4, varwv4 = open_fits_err(vfile4)
+f_data3 = poly.polyval(waves3, coefs)
+f_data4 = poly.polyval(waves4, coefs)
 
 # Convert all_ra3 to a delta array away from central RA, and do same for DEC
 # Multiply by 360 to convert to arcseconds
@@ -261,6 +362,10 @@ ddec4 = (all_dec4 - dec4) * 3600
 
 # Define narrow bands around Hb, Hg, Hd
 dw = 4
+
+data2 = data3
+waves2 = waves3
+var2 = var3
 
 data3 = data4
 waves3 = waves4
@@ -312,6 +417,7 @@ err4 = numpy.sum(numpy.sqrt(var4[:,33:-28,12:-12]), axis=(1,2))
 #~ plt.plot(waves4,spectra4,drawstyle='steps-mid',color='orange')
 plt.errorbar(waves4,spectra4,yerr=err4,drawstyle='steps-mid',
 						 color='orange',ecolor='orange',errorevery=10)
+
 
 plt.plot(waves3[interval_wv2],numpy.sum(data_wv2,axis=(1,2)),'r-',lw=5)
 plt.plot(waves3[interval_wv1],numpy.sum(data_wv1,axis=(1,2)),'r-',lw=5)
@@ -406,9 +512,9 @@ ax3.set_title(r'H$\gamma$/H$\beta$')
 #~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
 									#~ linewidths=lw2, colors='r', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
-plt.imshow(ratio[30:-25,10:-10], origin='lower', vmin=0.4, vmax=0.5,
+plt.imshow(ratio[33:-28,12:-12], origin='lower', vmin=0.39, vmax=0.45,
 						interpolation="None", cmap='cubehelix',
-						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'H$\gamma$/H$\beta$',weight='bold',size='large')
 
@@ -423,9 +529,9 @@ ax3.set_title(r'H$\delta$/H$\beta$')
 #~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
 									#~ linewidths=lw2, colors='r', corner_mask=True,
 									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
-plt.imshow(ratio2[30:-25,10:-10], origin='lower', vmin=0.2, vmax=0.3,	#[33:-28,12:-12]
+plt.imshow(ratio2[33:-28,12:-12], origin='lower', vmin=0.2, vmax=0.26,	#[33:-28,12:-12]
 						interpolation="None", cmap='cubehelix',
-						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
 
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'H$\delta$/H$\beta$',weight='bold',size='large')
@@ -439,34 +545,113 @@ plt.tight_layout()
 # Do extinction correction on ratios, using expected line flux ratios
 # and relative interstellar extinction from Osterbock+2006
 
-c_HgHb = numpy.zeros( shape=[numpy.size(ratio[:,0]),numpy.size(ratio[0,:])] )
-c_HdHb = numpy.zeros( shape=[numpy.size(ratio[:,0]),numpy.size(ratio[0,:])] )
+c_HgHb = calculate_cHb(data_wv1, data_wv2, I_HgHb, f_HgHb, all_ra3, all_dec3)
+c_HdHb = calculate_cHb(data_wv3, data_wv2, I_HdHb, f_HdHb, all_ra3, all_dec3)
 
-for i in range(0,numpy.size(ratio[:,0])):
-	for j in range(0,numpy.size(ratio[0,:])):
-		c_HgHb[i,j] = (-1./f_HgHb)*numpy.log10( (ratio[i,j]/I_HgHb) )#*0.434
-		c_HdHb[i,j] = (-1./f_HdHb)*numpy.log10( (ratio2[i,j]/I_HdHb) )#*0.434
-		if numpy.isnan(c_HgHb[i,j]):
-			c_HgHb[i,j] = 0
-		if numpy.isposinf(c_HgHb[i,j]):
-			c_HgHb[i,j] = 0
-		if numpy.isneginf(c_HgHb[i,j]):
-			c_HgHb[i,j] = 0
-
-		if numpy.isnan(c_HdHb[i,j]):
-			c_HdHb[i,j] = 0
-		if numpy.isposinf(c_HdHb[i,j]):
-			c_HdHb[i,j] = 0
-		if numpy.isneginf(c_HdHb[i,j]):
-			c_HdHb[i,j] = 0
-
-		#print c_HgHb[i,j], c_HdHb[i,j]
+data3_dered, data3_dered_avg = flux_deredden(data2, c_HgHb, f_data3)
+data4_dered, data4_dered_avg = flux_deredden(data3, c_HgHb, f_data4)
 
 c_HgHb = c_HgHb[33:-28,12:-12]
 c_HdHb = c_HdHb[33:-28,12:-12]
+
+# Write dered to file
+write_fits(outfile4,data4_dered)
+write_fits(outfile3,data3_dered)
+
+#~ data3_dered = data3_dered[:,33:-28,12:-12]
+#~ data3_dered_avg = data3_dered_avg[:,33:-28,12:-12]
+
 # plot c (extinction coefficients) for both Hd and Hg ratios
 print numpy.median(c_HgHb[c_HgHb>0.05]), numpy.mean(c_HgHb[c_HgHb>0.05]), numpy.var(c_HgHb[c_HgHb>0.05])
 print numpy.median(c_HdHb[c_HdHb>0.05]), numpy.mean(c_HdHb[c_HdHb>0.05]), numpy.var(c_HdHb[c_HdHb>0.05])
+
+
+
+# Compare data3_dered, data3_dered_avg
+fig = plt.figure()
+
+spectra1 = numpy.sum(data3[:,33:-28,12:-12], axis=(1,2))
+err3 = numpy.sum(numpy.sqrt(var4[:,33:-28,12:-12]), axis=(1,2))
+#~ plt.plot(waves3,spectra3,drawstyle='steps-mid',color='blue')
+plt.errorbar(waves3,spectra1,yerr=err3,drawstyle='steps-mid',
+						 color='black',ecolor='black',errorevery=10)
+
+spectra2 = numpy.sum(data4[:,33:-28,12:-12], axis=(1,2))
+#~ plt.plot(waves3,spectra3,drawstyle='steps-mid',color='blue')
+plt.errorbar(waves3,spectra2,yerr=err3,drawstyle='steps-mid',
+						 color='red',ecolor='red',errorevery=10)
+
+spectra3 = numpy.sum(data3_dered, axis=(1,2))
+err3 = numpy.sum(numpy.sqrt(var3[:,33:-28,12:-12]), axis=(1,2))
+#~ #plt.plot(waves3,spectra3,drawstyle='steps-mid',color='blue')
+plt.errorbar(waves3,spectra3,yerr=err3,drawstyle='steps-mid',
+						 color='blue',ecolor='blue',errorevery=10)
+
+spectra4 = numpy.sum(data3_dered_avg, axis=(1,2))
+#err4 = numpy.sum(numpy.sqrt(var4[:,33:-28,12:-12]), axis=(1,2))
+plt.plot(waves4,spectra4,drawstyle='steps-mid',color='orange')
+#plt.errorbar(waves4,spectra4,yerr=err4,drawstyle='steps-mid',
+						 #color='orange',ecolor='orange',errorevery=10)
+
+plt.xlabel(r'Wavelength ($\AA$)')
+plt.ylabel('Counts')
+
+
+
+# Plot de-reddened narrorwband vs. original
+# Use Hdelta
+fig3 = plt.figure()
+ax3 = fig3.add_subplot(1,2,1)
+ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+#ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
+#~ ax3.set_title(r'H$\delta$/H$\beta$')
+#~ CS1 = plt.contour(numpy.sum(data_wv1[:,:,:],axis=0), levels,
+									#~ linewidths=lw, colors='b', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+#~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
+									#~ linewidths=lw2, colors='r', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+plt.imshow(numpy.sum(data_wv3[:,30:-25,10:-10],axis=0)*1e15, origin='lower', #vmin=0.2, vmax=0.3,
+						interpolation="None", cmap='cubehelix', vmin=0, vmax=2,
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+
+#~ cbar = plt.colorbar()
+#~ cbar.ax.set_ylabel(r'H$\delta$',weight='bold',size='large')
+ax = plt.gca()
+ax.get_xaxis().get_major_formatter().set_useOffset(False)
+ax.get_yaxis().get_major_formatter().set_useOffset(False)
+plt.tight_layout()
+
+data_wv3_dered = data3_dered[interval_wv3,:,:]
+
+ax3 = fig3.add_subplot(1,2,2)
+ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+#ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
+#~ ax3.set_title(r'H$\delta$/H$\beta$')
+#~ CS1 = plt.contour(numpy.sum(data_wv1[:,:,:],axis=0), levels,
+									#~ linewidths=lw, colors='b', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+#~ CS2 = plt.contour(numpy.sum(data_wv2[:,:,:],axis=0), levels2,
+									#~ linewidths=lw2, colors='r', corner_mask=True,
+									#~ extent=[all_ra[0],all_ra[-1],all_dec[5],all_dec[-1]])
+plt.imshow(numpy.sum(data_wv3_dered[:,30:-25,10:-10],axis=0)*1e15, origin='lower', #vmin=0.2, vmax=0.3,
+						interpolation="None", cmap='cubehelix', vmin=0, vmax=2,
+						extent=[dra3[10],dra3[-10],ddec3[30],ddec3[-25]])#, origin='lower') # inferno - good
+
+cbar = plt.colorbar()
+cbar.ax.set_ylabel(r'Integrated Flux (H$\delta$) [10$^{-15}$ erg cm$^{-2}$ s$^{-1}$ sr$^{-1}$]',weight='bold',size='large')
+ax = plt.gca()
+ax.get_xaxis().get_major_formatter().set_useOffset(False)
+ax.get_yaxis().get_major_formatter().set_useOffset(False)
+plt.tight_layout()
+
+plt.show()
+# Save dereddened flux arrays to new data cube fits files
+
+
+
 
 
 
@@ -487,10 +672,9 @@ ax3.set_title(r'c$_{H \gamma /H \beta}$',weight='bold',size='large')
 plt.imshow(c_HgHb, origin='lower', vmin=0.25, vmax=0.5,
 						interpolation="None", cmap='cubehelix',
 						extent=[dra3[12],dra3[-12],ddec3[33],ddec3[-28]])#, origin='lower') # inferno - good
-#~ cbar = plt.colorbar()
-#~ cbar.ax.set_ylabel(r'c$_{H \beta}$',weight='bold')
 
 ax3 = fig3.add_subplot(1,2,2)
+ax = plt.gca()
 ax3.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
 ax3.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
 #ax3.set_title(r'H$\beta$/[OIII]: '+ra0+' '+dec0)
@@ -509,7 +693,7 @@ plt.imshow(c_HdHb, origin='lower', vmin=0.25, vmax=0.5,
 
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'c$_{H \beta}$',weight='bold',size='large')
-ax = plt.gca()
+
 plt.tight_layout()
 
 
@@ -529,7 +713,6 @@ plt.tight_layout()
 ra_star = 283.3962
 dec_star = 33.0292
 
-
 line_ra = dra3[12:-12]
 line_dec = ddec3[33:-28]
 line_dec = line_dec[::-1]
@@ -548,8 +731,6 @@ for i in range(0,len(line_ra2)):
 	else:
 		ii += 1
 		line_ra2[i] = line_ra[ii]
-	#~ c_HgHb_line[i] = numpy.median( c_HgHb[i,ii:ii+5] )
-	#~ c_HdHb_line[i] = numpy.median( c_HdHb[i,ii:ii+5] )
 	c_HgHb_line[i] = c_HgHb[i,ii]
 	c_HdHb_line[i] = c_HdHb[i,ii]
 	d_arcsec[i] = numpy.sqrt( (all_ra3[ii+12] - ra_star)**2 + (all_dec3[i+33] - dec_star)**2 )*3600.
@@ -564,7 +745,7 @@ ax3.set_ylabel(r'c$_{H \beta}$',weight='bold',size='large')
 ax.get_xaxis().get_major_formatter().set_useOffset(False)
 ax.get_yaxis().get_major_formatter().set_useOffset(False)
 chghb, = plt.plot(d_arcsec[1:-2],c_HgHb_line[1:-2],drawstyle='steps-mid',
-									label=r'H$\gamma$/H$\beta$')
+									color='red', label=r'H$\gamma$/H$\beta$')
 chdhb, = plt.plot(d_arcsec[1:-2],c_HdHb_line[1:-2],drawstyle='steps-mid',
 									color='black', label = r'H$\delta$/H$\beta$')
 plt.legend(handles=[chghb, chdhb])
