@@ -21,6 +21,32 @@ plt.rcParams["font.family"] = "serif"
 
 
 
+def open_fits(file,*args):
+	'''
+	Open the vcube fits file.
+	Grab the variance cube + wavelength.
+	*args - if set, then read in different RA, DEC header value (NOT APPLICABLE)
+	'''
+	hdulist = fits.open(file)		# Open the file
+	data = hdulist[0].data		# Define data cube (3D: wave, y, x)
+	wv0 = hdulist[0].header['CRVAL3']					# wavelength zeropoint
+	wv_interval = hdulist[0].header['CD3_3']		# Defines delta(wave)
+	hdulist.close()
+
+	nwv = numpy.size(data[:,0,0])
+	wvlast = wv0 + nwv*wv_interval
+	all_wv = numpy.arange(wv0, wvlast, wv_interval)		# Defined using known delta(wave) and central wavelength
+	print wv0, wvlast, numpy.size(all_wv)
+
+	# Limit x, y image area to only include "good" image area
+	# (i.e., no blank space or edge pixels)
+	# Same for wavelength space
+	data = data[400:-300,33:-18,12:-12]
+	all_wv = aa_wv[400:-300]
+
+	return data, all_wv
+
+
 
 def gaus(xdata,amp,cen,stdv):
 	"""
@@ -73,38 +99,63 @@ def gaussum(xdata,*params):
 
 
 # Define reference path and fits file, dat file here
-ref_path = 'C:\Users\keho8439\Documents\CHESS\Alignments\chess2_vacuum_alignments'
-wavefile = "\chess2_wave_soln_pre-skin.pkl"
-#~ ref_path = 'C:\Users\keho8439\Documents\CHESS\Alignments\chess2_postflight_cals'
-#~ wavefile = "\chess2_wave_soln_post-flight.pkl"
-dats = pkl.load(open(ref_path+wavefile,'r'))
+'''
+Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
+(M57, NGC6720)							211			Small		BH2, Hbeta		60		N
+														212			Small		BL,4500				20		N
+														213			Small		BL,4500				300		N
+									170415		188			Medium	BM,5900				10		N
+									170619		259			Large		BM,4550				1050	Y? (DON'T USE)
+														260			Large		BM,4550				1050	Y?
+														261			Large		BM,4550				950		Y?
+									170620		64			Medium	BM,5200				157		N?
 
-## Order Spectra is a list of all of the individual order spectra.
-indv = dats["Order Spectra"]
-err = num.sqrt(indv)		# Take Poisson errors only for now.
-## Wavelength solution per order.
-wave = dats["Order Wavelengths"]
-## List of pixel values per order.
-pixs = dats["Order Pixels"]
+Units of flux-cal data: erg/s/cm^2/Angstrom
+'''
+path='C:\Users\Keri Hoadley\Documents\KCWI'
+dir = '\\'
+redux='redux'
+int = 'icubes'
+var = 'vcubes'
 
-## Wavelength Fit Parms has a list containing the components of an n-polynomial
-## fit describing the relationship between pixels and wavelength.
-## We can read it out to do some manipulation on the function, if the
-## spectrum is shifted. but we expect the same pixel/wavelength relation.
-parms = dats["Wavelength Fit Parms"]
+date='170412'
+
+index1=210		# not ready
+index2=211		# not ready
+index3=212		# for OII, OIII lines analysis
+index4=213		# all other lines, use this higher S/N data set
+
+intfile3 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index3,int)
+file3 = path+dir+date+dir+redux+dir+intfile3
+varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
+vfile3 = path+dir+date+dir+redux+dir+varfile3
+
+print file3
+
+intfile4 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index4,int)
+file4 = path+dir+date+dir+redux+dir+intfile4
+varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
+vfile4 = path+dir+date+dir+redux+dir+varfile4
 
 
-# Open H2 emission lamp spectra (simulated)
-# File is set up with columns as: wavelength (Ang), flux(ergs/cm2/s/Ang), convolved flux(ers/cm2/s/Ang)
-h2file = "C:\Users\keho8439\Documents\IDL code\kf_cos_fit\h2lamp.txt"
-h2lines = open(h2file).readlines()
+# Read in file, get data + waves from files
+data3, waves3, ra3, dec3, all_ra3, all_dec3 = open_fits(file3)		# data in units erg cm-2 s-1
+data4, waves4, ra4, dec4, all_ra4, all_dec4 = open_fits(file4)		# data in units erg cm-2 s-1
+var3, varwv3 = open_fits_err(vfile3)
+var4, varwv4 = open_fits_err(vfile4)
+
+
+# Open emission line template file:
+# Important columns in file: Line ID (col 0), Lab Wave (col 2)
+linesfile = date+"_212-213_lines.dat"
+lines = open(path+dir+linesfile).readlines()
 
 # Read through each line, and append colymn values to correct arrays
 waveh2 = []
 fluxh2 = []
 convh2 = []
 
-for line in h2lines:
+for line in lines:
 	if line.startswith('#'):
 		continue
 	column = line.split()
