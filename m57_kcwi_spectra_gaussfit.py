@@ -29,6 +29,7 @@ def open_fits(file,*args):
 	'''
 	hdulist = fits.open(file)		# Open the file
 	data = hdulist[0].data		# Define data cube (3D: wave, y, x)
+	print numpy.shape(data)
 	wv0 = hdulist[0].header['CRVAL3']					# wavelength zeropoint
 	wv_interval = hdulist[0].header['CD3_3']		# Defines delta(wave)
 	hdulist.close()
@@ -42,9 +43,49 @@ def open_fits(file,*args):
 	# (i.e., no blank space or edge pixels)
 	# Same for wavelength space
 	data = data[400:-300,33:-18,12:-12]
-	all_wv = aa_wv[400:-300]
+	all_wv = all_wv[400:-300]
+	print numpy.shape(data)
 
 	return data, all_wv
+
+
+
+def open_lineID(file,*args):
+	'''
+	Open the DAT file with line IDs of emission per observation.
+	Grab the line ID + rest wavelength.
+	'''
+	hlines = open(file).readlines()
+
+	# Read through each line, and append colymn values to correct arrays
+	linewave = []
+	lineID = []
+
+	for line in lines:
+		if line.startswith('#'):
+			continue
+		column = line.split()
+		lineID.append( str(column[0]) )
+		linewave.append( float(column[2]) )
+
+	return lineID, linewave
+
+
+
+def create_spectum(data,*args):
+	'''
+	Collapse image area to create 1D spectrum.
+	No args = collapse entire image area
+	args: [RA:RA,DEC:DEC] - define image area to collapse along wavelength
+	'''
+	if len(args) == 0:
+		return numpy.sum(data,axis=(1,2))
+	if len(args) == 2:
+		return numpy.sum(data4[:,args[0]:args[1],:],axis=(1,2))
+	if len(args) == 4:
+		return numpy.sum(data4[:,args[0]:args[1],args[2]:args[4]],axis=(1,2))
+	else:
+		return "INCORRECT NUMBER OF ARGUMENTS - NO SPECTRUM CREATED"
 
 
 
@@ -54,7 +95,6 @@ def gaus(xdata,amp,cen,stdv):
 	for its amplitude (amp), center (cen), and width/standard
 	deviation (wid). You also must supply the x value data
 	that it will be iterating over.
-
 	input
 	-----
 	xdata = the independent value array
@@ -72,7 +112,6 @@ def gaussum(xdata,*params):
 	This function will sum the different gaussian fits together. It takes in the x-data array, as well
 	as arrays for the three parameters for a Gaussian curve. Make sure that if you are going to use gassum
 	on its own to include in the * when you're inputting the parameter array.
-
 	input
 	-----
 	xdata = the independent value array
@@ -109,11 +148,12 @@ Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
 														260			Large		BM,4550				1050	Y?
 														261			Large		BM,4550				950		Y?
 									170620		64			Medium	BM,5200				157		N?
-
 Units of flux-cal data: erg/s/cm^2/Angstrom
 '''
-path='C:\Users\Keri Hoadley\Documents\KCWI'
-dir = '\\'
+#~ path='C:\Users\Keri Hoadley\Documents\KCWI'
+#~ dir = '\\'
+path='/home/keri/KCWI'
+dir = '/'
 redux='redux'
 int = 'icubes'
 var = 'vcubes'
@@ -139,29 +179,45 @@ vfile4 = path+dir+date+dir+redux+dir+varfile4
 
 
 # Read in file, get data + waves from files
-data3, waves3, ra3, dec3, all_ra3, all_dec3 = open_fits(file3)		# data in units erg cm-2 s-1
-data4, waves4, ra4, dec4, all_ra4, all_dec4 = open_fits(file4)		# data in units erg cm-2 s-1
-var3, varwv3 = open_fits_err(vfile3)
-var4, varwv4 = open_fits_err(vfile4)
+data3, waves3 = open_fits(file3)		# data in units erg cm-2 s-1
+data4, waves4 = open_fits(file4)		# data in units erg cm-2 s-1
+var3, varwv3 = open_fits(vfile3)
+var4, varwv4 = open_fits(vfile4)
 
 
 # Open emission line template file:
 # Important columns in file: Line ID (col 0), Lab Wave (col 2)
 linesfile = date+"_212-213_lines.dat"
-lines = open(path+dir+linesfile).readlines()
+lineID, linewave = open_lineID(path+dir+linesfile)
 
-# Read through each line, and append colymn values to correct arrays
-waveh2 = []
-fluxh2 = []
-convh2 = []
 
-for line in lines:
-	if line.startswith('#'):
+spectra = numpy.sum(data4,axis=(1,2))
+
+# bin the spectra by ~ 20 pixels?
+# Use central wavelenth every 20 steps
+# Take median (or avg) of 20 pixels considered
+bin_size = 100
+wave_bin = numpy.zeros( numpy.size(waves4)/bin_size )
+flux_bin = numpy.zeros( numpy.size(waves4)/bin_size )
+count = 0
+for i in range(0, numpy.size(waves4)/bin_size):
+	if count+bin_size > numpy.size(waves4):
 		continue
-	column = line.split()
-	waveh2.append( float(column[0]) )
-	fluxh2.append( float(column[1]) )
-	convh2.append( float(column[2]) )
+	else:
+		tmpwave = waves4[count:count+bin_size]
+		wave_bin[i] = tmpwave[9]
+		flux_bin[i] = numpy.median(spectra[count:count+bin_size])
+	count += bin_size
 
-flux_mx = max(fluxh2)
-fluxh2 = map(lambda x: 1000*(x/flux_mx) - 100, fluxh2)
+# Plot spectra (log)
+fig1 = plt.figure()
+ax1 = fig1.add_subplot(2,1,1)
+plt.semilogy(waves4, numpy.sum(data4,axis=(1,2)), drawstyle='steps-mid', lw=3)
+plt.semilogy(wave_bin, flux_bin, 'ro', ms = 5)
+plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
+ax2 = fig1.add_subplot(2,1,2)
+plt.plot(waves4, numpy.sum(data4,axis=(1,2)), drawstyle='steps-mid', lw=3)
+plt.plot(wave_bin, flux_bin, 'ro', ms = 5)
+plt.xlabel(r'Wavelength ($\AA$)')
+plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
+plt.show()
