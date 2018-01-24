@@ -30,7 +30,6 @@ def open_fits(file,*args):
 	'''
 	hdulist = fits.open(file)		# Open the file
 	data = hdulist[0].data		# Define data cube (3D: wave, y, x)
-	print numpy.shape(data)
 	wv0 = hdulist[0].header['CRVAL3']					# wavelength zeropoint
 	wv_interval = hdulist[0].header['CD3_3']		# Defines delta(wave)
 	hdulist.close()
@@ -38,14 +37,12 @@ def open_fits(file,*args):
 	nwv = numpy.size(data[:,0,0])
 	wvlast = wv0 + nwv*wv_interval
 	all_wv = numpy.arange(wv0, wvlast, wv_interval)		# Defined using known delta(wave) and central wavelength
-	print wv0, wvlast, numpy.size(all_wv)
 
 	# Limit x, y image area to only include "good" image area
 	# (i.e., no blank space or edge pixels)
 	# Same for wavelength space
 	data = data[400:-300,33:-28,12:-12]
 	all_wv = all_wv[400:-300]
-	print numpy.shape(data)
 
 	if len(args) > 0:
 		ra0 = hdulist[0].header['TARGRA']#['CD1_1']		# RA (at center?)
@@ -76,8 +73,8 @@ def open_fits(file,*args):
 	dec_lim = (ndec/2.)*delta_dec
 	all_dec = numpy.arange(dec0_deg-dec_lim, dec0_deg+dec_lim, delta_dec)	# array containing change in DEC from center of image
 
-	print all_dec[33], all_dec[-28], all_ra[12],all_ra[-12]
-	print
+	#~ print all_dec[33], all_dec[-28], all_ra[12],all_ra[-12]
+	#~ print
 
 	return data, all_wv, all_ra, all_dec
 
@@ -230,7 +227,7 @@ def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 				ls[i] += (flux[k] - cfit[k])**2 / (err[k]**2)
 		ls[i] = ls[i]/(numpy.size(waves)) # - numpy.size(poly_coeffs))
 
-		print 'Polynomial: %i - Least-squares: %0.3f' %(i,ls[i])
+		#~ print 'Polynomial: %i - Least-squares: %0.3f' %(i,ls[i])
 
 		# Store lowest least-squares continuum fit to continuum_array
 		if i == 1:
@@ -242,6 +239,17 @@ def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 				ls_min = ls[i]
 
 	return continuum_array, ls_min
+
+
+def subtract_continuum(data,continuum):
+	'''
+	Subtract the continuum flux from the full spectrum at whatever
+	image bin continuum was determined for.
+	Will be left with a "zeroed-flux" continuum, which is necessary
+	for performing multi-Gaussian profile fitting of all spectral lines.
+	'''
+	return data - continuum
+
 
 
 def gaus(xdata,amp,cen,stdv):
@@ -325,7 +333,6 @@ file3 = path+dir+date+dir+redux+dir+intfile3
 varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
 vfile3 = path+dir+date+dir+redux+dir+varfile3
 
-print file3
 
 intfile4 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index4,int)
 file4 = path+dir+date+dir+redux+dir+intfile4
@@ -345,25 +352,36 @@ linesfile = date+"_212-213_lines.dat"
 
 # Open DAT file with emission line info
 lineID, linewave = open_lineID(path+dir+linesfile)
+i_Hb = lineID.index('Hbeta')
+print lineID
+print lineID.index('Hbeta')
+print
 
 
 # Define image "bins" to loop through and find spectra,
 # continuum level(s), and emission line characteristics.
 # Image size is: (wave, 132L, 22L)
-ra_bin = 2 #numpy.size(data4[0,0,:])/4
-dec_bin = 2 #numpy.size(data4[0,:,0])/4
+# TEST BINS:
+ra_bin = numpy.size(data4[0,0,:])/2			# 2
+dec_bin = numpy.size(data4[0,:,0])/2		# 33
+#REAL BINS:
+#~ ra_bin = 2
+#~ dec_bin = 2
+
 bin_size = 20		# Bin size of continuum determination in each spectrum
-print 'RA bin: ', ra_bin
-print 'DEC bin: ', dec_bin
-print
+#~ print 'RA bin: ', ra_bin
+#~ print 'DEC bin: ', dec_bin
+#~ print
 
 # Make a continuum flux 2D array with size of total # of elements in ra, dec_bin
 continuum_img = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
 															numpy.size(data4[0,0,:])/ra_bin] )
-print numpy.shape(continuum_img)
-print numpy.size(data4[0,:,0])-1
-print numpy.size(data4[0,0,:])-1
-print
+chi2 = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
+										 numpy.size(data4[0,0,:])/ra_bin] )
+#~ print numpy.shape(continuum_img)
+#~ print numpy.size(data4[0,:,0])-1
+#~ print numpy.size(data4[0,0,:])-1
+#~ print
 
 ind_i = 0
 
@@ -371,8 +389,8 @@ ind_i = 0
 for i in range(0,numpy.size(data4[0,:,0])-1,dec_bin):
 	ind_j = 0
 	for j in range(0,numpy.size(data4[0,0,:])-1,ra_bin):
-		print i, i+dec_bin
-		print j, j+ra_bin
+		#~ print 'Analyzing for pixels: RA [%i, %i], DEC [%i, %i]' %
+		#~ 				(j, j+ra_bin, i, i+dec_bin)
 
 		data_bin = data4[:,i:i+dec_bin,j:j+ra_bin]
 		var_bin = var4[:,i:i+dec_bin,j:j+ra_bin]
@@ -389,10 +407,12 @@ for i in range(0,numpy.size(data4[0,:,0])-1,dec_bin):
 		# 2. Use new continuum (flux) array to fit polynomial through entire
 		# 		wavelength range.
 		#			Return continuum array and least-squares min chi2 value of fit to data.
-		continuum_flux, chi2 = continuum_fit_lsq(wave_bin, flux_bin, waves4, spectra, err)
+		continuum_flux, chi2[ind_i,ind_j] = continuum_fit_lsq(wave_bin, flux_bin, waves4, spectra, err)
 		continuum_img[ind_i,ind_j] = numpy.sum(continuum_flux)
-		print chi2
-		print 'Total continuum flux: ', numpy.sum(continuum_flux)
+		print 'At [%i - %i, %i - %i] -- Total continuum flux: %.3e   Chi2 = %.3f' % (i, i+dec_bin, j, j+ra_bin, numpy.sum(continuum_flux),chi2[ind_i,ind_j])
+
+		# Subtract continuum flux from spectrum
+		spectra_0 = subtract_continuum(spectra, continuum_flux)
 
 		#~ # Plot spectra (log)
 		#~ fig1 = plt.figure()
@@ -416,12 +436,32 @@ for i in range(0,numpy.size(data4[0,:,0])-1,dec_bin):
 
 # Plot total continuum flux image
 fig1 = plt.figure()
-ax1 = fig1.add_subplot(1,1,1)
+ax1 = fig1.add_subplot(1,2,1)
+ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
+ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
 plt.imshow(continuum_img, origin='lower',
-						interpolation="none", cmap='viridis',
+						interpolation="none", cmap='CMRmap',#cmap='nipy_spectral',
 						extent=[ra[0],ra[-1],dec[0],dec[-1]])
+cbar = plt.colorbar()
+cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
 ax = plt.gca()
 ax.get_xaxis().get_major_formatter().set_useOffset(False)
 ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+
+# Plot chi2 statistics map of continuum fit to data
+#fig1 = plt.figure()
+ax1 = fig1.add_subplot(1,2,2)
+ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
+ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
+plt.imshow(chi2, origin='lower',
+						interpolation="none", cmap='nipy_spectral',
+						extent=[ra[0],ra[-1],dec[0],dec[-1]])
+cbar = plt.colorbar()
+cbar.ax.set_ylabel(r'$\chi ^{2}$ statistic: continuum fit to data',weight='bold',size='large')
+ax = plt.gca()
+ax.get_xaxis().get_major_formatter().set_useOffset(False)
+ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
 
 plt.show()
