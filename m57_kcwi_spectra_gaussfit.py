@@ -1,3 +1,4 @@
+
 #
 #
 # Gaussian line shape fitting routine
@@ -79,6 +80,21 @@ def open_fits(file,*args):
 	return data, all_wv, all_ra, all_dec
 
 
+def write_fits(file,data):
+	# First, read-in previous list of events
+	try:
+		hdulist=fits.open(file,mode='update')
+		hdulist[0].data = data
+
+		hdulist.flush()		# Should update file with new events array
+		hdulist.close()
+		print "Updating %s SUCCESS!" % (file)
+
+	except:
+		print "Update to %s FAILED" % (file)
+
+	return
+
 
 def open_lineID(file,*args):
 	'''
@@ -146,13 +162,11 @@ def fit_continuum_to_spectrum(spectrum, waves, bin_size):
 				with increasing polynomial factor), then note where the fit doesn't
 				improve and say that fit is good to nth polynomial
 				(THIS SHOULD BE A SEPARATE FUNCTION)
-
 	Input:
 	------
 	spectrum - 1D array: collapsed data cube as a function of wavelength only
 	waves - 1D array: corresponding wavelength array to spectrum
 	bin_size - Int (1 number): size of spectral region to find continuum value for
-
 	Output:
 	-------
 	wave_bin - 1D array: wavelength array where continuum values were found
@@ -180,14 +194,12 @@ def fit_continuum_to_spectrum(spectrum, waves, bin_size):
 def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 	'''
 	Use continuum binned arrays to find a polynomial fit through the flux continuum.
-
 	Loop through each polynomial fit, and find least-squares statistic between
 		total flux array and fitted polynomial spectrum (continuum).
 	When statistic does not improve appreciably after the next iteration,
 		- note where (index) the statistic did not improve
 		- take the previous iteration's polynomial fit as best fit through the continuum.
 	Return polynomial fitted array (new "flux" array)
-
 	Inputs:
 	-------
 	wave_bin - 1D array: wavelength array corresponding to continuum array
@@ -197,7 +209,6 @@ def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 	flux - 1D array: entire 1D spectrum to use to find entire continuum
 									and perform least-squares statistics with
 	err - 1D array: error bars of 1D spectrum
-
 	Outputs:
 	--------
 	polyfit_vals
@@ -291,7 +302,7 @@ def gaussum(xdata,*params):
 		cen = numpy.append(cen,y)
 		z = params[i+2]
 		stdv = numpy.append(stdv,z)
-	global storage #You may not need storage to be global so think about taking this part out. storage stores the data
+	#~ global storage #You may not need storage to be global so think about taking this part out. storage stores the data
 	storage = [[0 for x in range(1)] for x in range(len(params)/3)] #from each iteration of the gaussian equation into
 	for i in range(len(params)/3):#individual rows. So row one will be the gaussian solutions to the first peak and so on
 		storage[i] = gaus(xdata,amp[i],cen[i],stdv[i])
@@ -313,10 +324,10 @@ Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
 									170620		64			Medium	BM,5200				157		N?
 Units of flux-cal data: erg/s/cm^2/Angstrom
 '''
-path='C:\Users\Keri Hoadley\Documents\KCWI'
-dir = '\\'
-#~ path='/home/keri/KCWI'
-#~ dir = '/'
+#~ path='C:\Users\Keri Hoadley\Documents\KCWI'
+#~ dir = '\\'
+path='/home/keri/KCWI'
+dir = '/'
 redux='redux'
 int = 'icubes'
 var = 'vcubes'
@@ -328,13 +339,13 @@ index2=211		# not ready
 index3=212		# for OII, OIII lines analysis
 index4=213		# all other lines, use this higher S/N data set
 
-intfile3 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index3,int)
+intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
 file3 = path+dir+date+dir+redux+dir+intfile3
 varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
 vfile3 = path+dir+date+dir+redux+dir+varfile3
 
 
-intfile4 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index4,int)
+intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
 file4 = path+dir+date+dir+redux+dir+intfile4
 varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
 vfile4 = path+dir+date+dir+redux+dir+varfile4
@@ -362,8 +373,8 @@ print
 # continuum level(s), and emission line characteristics.
 # Image size is: (wave, 132L, 22L)
 # TEST BINS:
-ra_bin = numpy.size(data4[0,0,:])/2			# 2
-dec_bin = numpy.size(data4[0,:,0])/2		# 33
+ra_bin = 2 #numpy.size(data4[0,0,:])/2			# 2
+dec_bin = 33 #numpy.size(data4[0,:,0])/2		# 33
 #REAL BINS:
 #~ ra_bin = 2
 #~ dec_bin = 2
@@ -382,6 +393,22 @@ chi2 = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
 #~ print numpy.size(data4[0,:,0])-1
 #~ print numpy.size(data4[0,0,:])-1
 #~ print
+
+
+#~ # Plot data image before and after continuum subtraction
+#~ fig1 = plt.figure()
+#~ ax1 = fig1.add_subplot(1,2,1)
+#~ ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
+#~ ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
+#~ plt.imshow(numpy.sum(data4,axis=0), origin='lower',
+			#~ interpolation="none", cmap='nipy_spectral',
+			#~ extent=[ra[0],ra[-1],dec[0],dec[-1]])
+#~ cbar = plt.colorbar()
+#~ cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
+#~ ax = plt.gca()
+#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
+#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
 
 ind_i = 0
 
@@ -411,28 +438,91 @@ for i in range(0,numpy.size(data4[0,:,0])-1,dec_bin):
 		continuum_img[ind_i,ind_j] = numpy.sum(continuum_flux)
 		print 'At [%i - %i, %i - %i] -- Total continuum flux: %.3e   Chi2 = %.3f' % (i, i+dec_bin, j, j+ra_bin, numpy.sum(continuum_flux),chi2[ind_i,ind_j])
 
-		# Subtract continuum flux from spectrum
+		# 3. Subtract continuum flux from spectrum
 		spectra_0 = subtract_continuum(spectra, continuum_flux)
+		# Check for nan's
+		for w in range(0,len(spectra_0)):
+			if spectra_0[w] <= 0 or numpy.isnan(spectra_0[w]):
+				spectra_0[w] = spectra_0[w-1]
+		# (save to separate fits file - after end of loop)
+		# take the average of continuum flux over bin sizes
+		for k in range(i,i+dec_bin):
+			for l in range(j,j+ra_bin):
+				data4[:,k,l] = data4[:,k,l] - continuum_flux/(dec_bin*ra_bin)
 
-		#~ # Plot spectra (log)
-		#~ fig1 = plt.figure()
-		#~ ax1 = fig1.add_subplot(2,1,1)
-		#~ plt.semilogy(waves4, numpy.sum(data_bin,axis=(1,2)), drawstyle='steps-mid', lw=3,
-						 #~ color='black')
-		#~ plt.semilogy(waves4, continuum_flux, drawstyle='steps-mid', lw=3, color='blue')
-		#~ plt.semilogy(wave_bin, flux_bin, 'ro', ms = 5)
-		#~ plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
-		#~ ax2 = fig1.add_subplot(2,1,2)
-		#~ plt.plot(waves4, numpy.sum(data_bin,axis=(1,2)), drawstyle='steps-mid', lw=3,
-				 #~ color='black')
-		#~ plt.plot(waves4, continuum_flux, drawstyle='steps-mid', lw=3, color='blue')
-		#~ plt.plot(wave_bin, flux_bin, 'ro', ms = 5)
-		#~ plt.xlabel(r'Wavelength ($\AA$)')
-		#~ plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
+		# 4. Find amplitudes of each emission line in spectra_0
+		i_ww = 0
+		lineamp = numpy.zeros( numpy.size(linewave) )
+		linestdv = numpy.ones( numpy.size(linewave) ) 	# Std. dev. array w/ guess:
+														# linewidth = 1
+		for ww in linewave:
+			i_linewave = numpy.where((waves4 <= ww+0.25) & (waves4 >= ww-0.25))[0]
+			#~ print i_linewave
+			amp = abs(numpy.max(spectra_0[i_linewave[0]-2:i_linewave[0]+2]))
+			if numpy.isnan(amp):
+				lineamp[i_ww] = lineamp[i_ww-1]
+			else:
+				lineamp[i_ww] = amp
+			i_ww += 1
+		print linewave
+		print lineamp
+
+		# 5. Now that linewave, lineamp, and linestdv exist, can call gaussum
+		# through the curve_fit routine
+		guess = numpy.zeros(0)
+		for i in range(len(lineamp)): #This is where the guessed values are all packed up into one array looking like
+			xi = lineamp[i]            #[amp1,cen1,stdv1,amp2,cen2,...]
+			guess = numpy.append(guess,xi)
+			yi = linewave[i]
+			guess = numpy.append(guess,yi)
+			zi = linestdv[i]
+			guess = numpy.append(guess,zi)
+
+		# This is where we take the gaussum function and use curvefit to find the best-fit
+		# multi-gaussian function across the order
+		popt, pcov = curve_fit(gaussum, waves4, spectra_0, p0=guess)#,sigma = err)# this optimizes the summed
+															   # gaussian function
+		fit = gaussum(waves4, *popt)
+
+		#The optimized parameters for each emission peak is stored here in a 3xn array.
+		popt = popt.reshape((len(popt)/3,3))
+
+
+		# Plot spectra (log)
+		fig1 = plt.figure()
+		ax1 = fig1.add_subplot(2,1,1)
+		plt.semilogy(waves4, numpy.sum(data_bin,axis=(1,2)), drawstyle='steps-mid', lw=3,
+						 color='black')
+		plt.semilogy(waves4, continuum_flux, drawstyle='steps-mid', lw=3, color='blue')
+		plt.semilogy(wave_bin, flux_bin, 'ro', ms = 5)
+		plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
+		ax2 = fig1.add_subplot(2,1,2)
+		plt.plot(waves4, numpy.sum(data_bin,axis=(1,2)), drawstyle='steps-mid', lw=3,
+				 color='black')
+		plt.plot(waves4, continuum_flux, drawstyle='steps-mid', lw=3, color='blue')
+		plt.plot(wave_bin, flux_bin, 'ro', ms = 5)
+		plt.plot(waves4, fit, lw=5, color='green')
+		plt.xlabel(r'Wavelength ($\AA$)')
+		plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
 
 		ind_j += 1
 
 	ind_i += 1
+
+#~ # Plot after continuum subtraction image of data4
+#~ ax1 = fig1.add_subplot(1,2,2)
+#~ ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
+#~ ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
+#~ plt.imshow(numpy.sum(data4,axis=0), origin='lower',
+			#~ interpolation="none", cmap='nipy_spectral',
+			#~ extent=[ra[0],ra[-1],dec[0],dec[-1]])
+#~ cbar = plt.colorbar()
+#~ cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
+#~ ax = plt.gca()
+#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
+#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+
 
 # Plot total continuum flux image
 fig1 = plt.figure()
@@ -465,3 +555,8 @@ ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 
 plt.show()
+
+
+# Write new datafile (no continuum) out to new file:
+newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_nocontinuum.fits' % (index4,int)
+write_fits(newfile,data4)
