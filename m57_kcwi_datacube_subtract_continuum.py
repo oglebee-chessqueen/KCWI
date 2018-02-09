@@ -260,6 +260,7 @@ def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 	return continuum_array, ls_min
 
 
+
 def subtract_continuum(data,continuum):
 	'''
 	Subtract the continuum flux from the full spectrum at whatever
@@ -271,175 +272,6 @@ def subtract_continuum(data,continuum):
 
 
 
-def define_amplitudes(lines, waves, dwave):
-	'''
-	Finds the amplitube (max) of the emission line from the line list provided
-	by finding the line in the spectrum and determining the max value of the line.
-	Provides an intial guess of the amplitude for the gaussian fitting routine.
-	'''
-	i_ww = 0
-	lineamp = numpy.zeros( numpy.size(lines) )
-
-	for ww in lines:
-		i_line = numpy.where((waves <= ww+0.25) & (waves >= ww-0.25))[0]
-		#print ww, i_linewave
-		amp = abs(numpy.max(spectra_0[i_line[0]-dwave:i_line[0]+dwave]))
-		if numpy.isnan(amp):
-			lineamp[i_ww] = lineamp[i_ww-1]
-		else:
-			lineamp[i_ww] = amp
-		i_ww += 1
-
-	return lineamp
-
-
-
-def define_parms(cen, amp, stdv):
-	'''
-	Use lists of wavelength centers, line amplitudes, and stardard deviation (sigma)
-	guesses to create the parameter list needed for the multi-gaussian fitting.
-	'''
-	guess = numpy.zeros(0)
-	for k in range(len(amp)): 	 #This is where the guessed values are all packed up into one array looking like
-		#~ xi = lineamp[k]         #[amp1,cen1,stdv1,amp2,cen2,...]
-		#~ guess = numpy.append(guess,xi)
-		#~ yi = linewave[k]
-		#~ guess = numpy.append(guess,yi)
-		#~ zi = linestdv[k]
-		#~ guess = numpy.append(guess,zi)
-		guess = numpy.append(guess,[amp[k],cen[k],stdv[k]])
-	return guess
-
-
-
-def velocity_info(parms, cen, ID, c):
-	'''
-	Determine the velocity and dispersion (dynamics) of each line per pixel,
-	based on the emission line info extracted from the gaussian fits.
-	'''
-	vr = numpy.zeros( numpy.size(cen) )			# km/s
-	fwhm = numpy.zeros( numpy.size(cen) )		# convert to km/s
-	for l in range(0, len(parms[:,0])):
-		if numpy.any(ID.index('Buffer')) == l:
-			continue
-		else:
-			vr[l] = ((parms[l,1] - cen[l]) / cen[l])*c
-			fwhm[l] = abs(2.3548*parms[l,2])*(c/cen[l])		# in wavelength (Ang) units --> km/s
-	return vr, fwhm
-
-
-
-
-def plot_gaussfit_show(waves4, spectra_0, fit, popt):
-	'''
-	SHOW plot of Gaussian fits over data,
-	this way can manipulate and see how fits went.
-	'''
-	fig1 = plt.figure()
-	ax2 = fig1.add_subplot(1,1,1)
-	plt.plot(waves4, spectra_0, drawstyle='steps-mid', lw=6,
-					 color='black')
-	plt.plot(waves4, fit, color='green', drawstyle='steps-mid', lw=3)
-	# also plot individual Gaussian fits
-	# Use this loop to determine v_r, fwhm from Gaussian fits
-	for l in range(0, len(popt[:,0])):
-		gfit = gaus(waves4,popt[l,0],popt[l,1],popt[l,2])
-		plt.plot(waves4, gfit, drawstyle='steps-mid', lw=2)
-	plt.xlabel(r'Wavelength ($\AA$)')
-	plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
-	plt.show()
-	return
-
-
-
-
-def plot_gaussfit_save(waves4, spectra_0, fit, popt, index, file):
-	'''
-	SAVE Gaussian fits of emission lines over data, defined at
-	each pixel location.
-	'''
-	# Save a plot with subfigures cutting the spectrum up into chunks
-	img_tot = len(index)-1
-	fig1 = plt.figure(figsize=(11,10))
-	for img in range(0, len(index)-1):
-		i1 = index[img]-20
-		i2 = index[img+1]+20
-		# total number of figs = wave_split_index - 1
-		ax2 = fig1.add_subplot(img_tot,1,img+1)
-		# plot spectrum and gaussfit over spectrum
-		plt.plot(waves4[i1:i2], spectra_0[i1:i2]*1e15, drawstyle='steps-mid',
-						 lw=5, color='black')
-		plt.plot(waves4[i1:i2], fit[i1:i2]*1e15, color='blue',
-						 drawstyle='steps-mid', lw=3)
-		for k in range(0, len(popt[:,0])):
-			gfit = gaus(waves4,popt[k,0],popt[k,1],popt[k,2])
-			plt.plot(waves4[i1:i2], gfit[i1:i2]*1e15, drawstyle='steps-mid', lw=1.5)
-		plt.xlim( (waves4[i1],waves4[i2]) )
-		# add axes at appropriate positions
-		if img == (len(index)-2)/2:
-			ax2.set_ylabel(r'Flux (10$^{-15}$ erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)',
-										 weight='bold',size='large')
-		if img == len(index)-2:
-			ax2.set_xlabel(r'Wavelength ($\AA$)',weight='bold',size='large')
-	plt.subplots_adjust(bottom=0.15, right=0.9, left=0.1, top=0.9)
-	plt.savefig(file, orientation='landscape', format='ps')
-	plt.close(fig1)		# clear figure
-	return
-
-
-
-
-
-def gaus(xdata,amp,cen,stdv):
-	"""
-	This function creats a gaussian curve by taking in values
-	for its amplitude (amp), center (cen), and width/standard
-	deviation (wid). You also must supply the x value data
-	that it will be iterating over.
-	input
-	-----
-	xdata = the independent value array
-	amp = the amplitude of the peak emission line (can be an array of amplitudes)
-	cen = the central wavelength of the peak (can be an array of centers)
-	stdv = the standard deviation of the emission line (can be an array of stdvs)
-	"""
-
-	return abs(amp) * numpy.exp(-(xdata-cen)**2 /(2.*stdv**2))
-
-
-
-def gaussum(xdata,*params):
-	"""
-	This function will sum the different gaussian fits together. It takes in the x-data array, as well
-	as arrays for the three parameters for a Gaussian curve. Make sure that if you are going to use gassum
-	on its own to include in the * when you're inputting the parameter array.
-	input
-	-----
-	xdata = the independent value array
-	params = array of all gaussian parameters alternating like [amp1,cen1,stdv1,amp2,cen2,...]
-	"""
-	amp = numpy.zeros(0)
-	cen = numpy.zeros(0)
-	stdv = numpy.zeros(0)
-
-	for i in range(0, len(params), 3): #This section is just unpacking the parameter array into amps, cens, and stdvs
-		x = params[i]
-		amp = numpy.append(amp,x)
-		y = params[i+1]
-		cen = numpy.append(cen,y)
-		z = params[i+2]
-		stdv = numpy.append(stdv,z)
-	#~ global storage #You may not need storage to be global so think about taking this part out. storage stores the data
-	storage = numpy.zeros( shape=[len(xdata),len(params)/3]) #[[0 for x in range(1)] for x in range(len(params)/3)] #from each iteration of the gaussian equation into
-	for i in range(len(params)/3):#individual rows. So row one will be the gaussian solutions to the first peak and so on
-		storage[:,i] = gaus(xdata,amp[i],cen[i],stdv[i])
-	#storage = numpy.asarray(storage)
-
-	# see what the plot looks like?
-	#~ plt.plot(xdata, numpy.sum(storage, axis=1), drawstyle='steps-mid')
-	#~ plt.show()
-
-	return numpy.sum(storage, axis=1)
 
 
 
@@ -457,7 +289,7 @@ Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
 Units of flux-cal data: erg/s/cm^2/Angstrom
 '''
 c = 3.0E5
-path='C:\Users\Keri Hoadley\Documents\KCWI'
+path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
 dir = '\\'
 #~ path='/home/keri/KCWI'
 #~ dir = '/'
@@ -591,50 +423,33 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 				spectra_0[w] = abs(numpy.nanmedian(spectra_0))
 				err[0] = 0
 
-		# 4. Find amplitudes of each emission line in spectra_0
-		# DO EACH ITERATION - if not and use "guess" from previous iteration,
-		# will think chi2 fit is good enough and won't search parameter space
-		# for better fits...
-		lineamp = define_amplitudes(linewave, waves4, 4)			# dwave = 4, # of indices to look around linecenter for amplitude
-		linestdv = numpy.ones( numpy.size(linewave) )*0.5 	# Std. dev. array w/ guess:
-																												# linewidth = 1
-
-		# 5. Now that linewave, lineamp, and linestdv exist, can call gaussum
-		# through the curve_fit routine
-		gauss_parms = define_parms(linewave, lineamp, linestdv)
-		bounds_lower = define_parms(numpy.array(linewave)-5, -5*lineamp, numpy.ones( numpy.size(linestdv) )*-numpy.inf)		# defines the lower limit bounds for curve_fit,
-																																# assuming the same for all elements
-		bounds_lower = tuple( bounds_lower )
-		bounds_upper = define_parms(numpy.array(linewave)+5, 5*lineamp, numpy.ones( numpy.size(lineamp) )*numpy.inf)
-		bounds_upper = tuple( bounds_upper )
-
-		# This is where we take the gaussum function and use curvefit to find the best-fit
-		# multi-gaussian function across the spectrum!
-		# OPTIMIZATION!
-		#~ #try:
-		popt, pcov = curve_fit(gaussum, waves4, spectra_0, p0=gauss_parms)#, bounds=(bounds_lower,bounds_upper))#, sigma = err)
-
-		fit = gaussum(waves4, *popt)	# Use the best-fit parms to create the emission line spectrum!
-
-		#The optimized parameters for each emission peak is stored here in a 3xn array.
-		popt = popt.reshape((len(popt)/3,3))
-		print popt
-		print pcov
-		print
-
-		# Determine velocity (v_r) and dispersion (fwhm) of each line
-		#~ #v_r, fwhm = velocity_info(popt, linewave, lineID, c)
-
-		# plot the fit!
-		plot_gaussfit_show(waves4, spectra_0, fit, popt)
-
-		# plot to save to file!
-		figfile = path+dir+date+'_gaussfit_ra%02i%02i_dec%03i%03i.ps' % (j, j+ra_bin, i, i+dec_bin)
-		plot_gaussfit_save(waves4, spectra_0, fit, popt, wave_split_index, figfile)
+		#### PLOTTING OPTIONS (to check what continuum subtraction/create is doing) #####
+		#~ # Plot spectra (log)
+		#~ fig1 = plt.figure()
+		#~ ax1 = fig1.add_subplot(2,1,1)
+		#~ plt.semilogy(waves4, numpy.sum(data_bin,axis=(1,2)), drawstyle='steps-mid', lw=3,
+						 #~ color='black')
+		#~ plt.semilogy(waves4, continuum_flux, drawstyle='steps-mid', lw=3, color='blue')
+		#~ plt.semilogy(wave_bin, flux_bin, 'ro', ms = 5)
+		#~ plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
+		#~ ax2 = fig1.add_subplot(2,1,2)
+		#~ plt.plot(waves4, numpy.sum(data_bin,axis=(1,2)), drawstyle='steps-mid', lw=3,
+				 #~ color='black')
+		#~ plt.plot(waves4, continuum_flux, drawstyle='steps-mid', lw=3, color='blue')
+		#~ plt.plot(wave_bin, flux_bin, 'ro', ms = 5)
+		#~ plt.xlabel(r'Wavelength ($\AA$)')
+		#~ plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
 
 
-		#~ except:
-			#~ print "Gaussfit didn't work - trying scipy.optimize.leastsq routine instead"
+		#~ # Plot the before and after continuum subtracted
+		#~ fig1 = plt.figure()
+		#~ ax2 = fig1.add_subplot(1,1,1)
+		#~ plt.plot(waves4, spectra, drawstyle='steps-mid', lw=3,
+				 #~ color='black')
+		#~ plt.plot(waves4, spectra_0, drawstyle='steps-mid', lw=3, color='blue')
+		#~ plt.axhline(0, linestyle='dashed', color='red', lw=3)
+		#~ plt.xlabel(r'Wavelength ($\AA$)')
+		#~ plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
 
 
 
@@ -663,7 +478,7 @@ ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 
 
-# Plot total continuum flux image
+# Plot total continuum flux image + chi2 fit
 fig1 = plt.figure()
 ax1 = fig1.add_subplot(1,2,1)
 ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
@@ -677,7 +492,6 @@ cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',
 ax = plt.gca()
 ax.get_xaxis().get_major_formatter().set_useOffset(False)
 ax.get_yaxis().get_major_formatter().set_useOffset(False)
-
 
 # Plot chi2 statistics map of continuum fit to data
 #fig1 = plt.figure()
