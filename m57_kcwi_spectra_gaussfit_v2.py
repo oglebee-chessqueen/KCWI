@@ -17,7 +17,7 @@ from astropy.io import fits
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
-from scipy.optimize import leastsq
+from scipy.optimize import leastsq		#least_squares #
 plt.rcParams["font.family"] = "serif"
 #matplotlib.rc('text', usetex=True)
 
@@ -460,6 +460,40 @@ def gaussum(xdata,*params):
 
 
 
+def gaussfit(parms, x0, y0):
+	'''
+	This function does all the heavy (time consuming) work:
+	Does a try/except:
+		- try curve_fit optimization first.
+		- if that doesn't work (usually gets to max iterations without converging):
+			- except to leastsq() optimization, which should at least provided
+			  a "best-guess" set of parms from the last iteration
+	'''
+	try:
+		#~ #popt, pcov = curve_fit(gaussum, waves4, spectra_0, p0=gauss_parms)#, bounds=(bounds_lower,bounds_upper))#, sigma = err)
+		popt, pcov = curve_fit(gaussum, x0, y0, p0=parms, maxfev = 15000)
+		print popt.reshape((len(popt)/3,3))
+		print pcov
+		print
+	except RuntimeError:
+		print "RuntimeError encountered: trying leastsq"
+		#popt = curve_fit(gaussum, x0, y0, p0=parms, maxfev = 100000000)
+		#popt, pcov, infodict, errmsg, ier = curve_fit(gaussum, x0, y0, p0=parms, full_output=True)		# nope
+		func = lambda p,x,y: gaussum(x,*p) - y
+		popt, pcov, infodict, errmsg, ier = leastsq(func,parms,args=(x0,y0),full_output=True, maxfev = 5000)
+		#popt = popt.x
+		print popt.reshape((len(popt)/3,3))
+		print pcov
+		print infodict
+		print errmsg, ier
+		print
+	return popt
+
+
+#~ # If leastsq is invoked, uses func to do model - y
+#~ def func(x,p,y):
+	#~ return gaussum(x, *p) - y
+
 
 
 
@@ -642,17 +676,14 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 		# This is where we take the gaussum function and use curvefit to find the best-fit
 		# multi-gaussian function across the spectrum!
 		# OPTIMIZATION!
-		#~ #try:
-		popt, pcov = curve_fit(gaussum, waves4, spectra_0, p0=gauss_parms)#, bounds=(bounds_lower,bounds_upper))#, sigma = err)
+		popt = gaussfit(gauss_parms, waves4, spectra_0)
 
 		fit = gaussum(waves4, *popt)	# Use the best-fit parms to create the emission line spectrum!
 
 		#The optimized parameters for each emission peak is stored here in a 3xn array.
 		g_parms[:,ind_i,ind_j] = popt
 		popt = popt.reshape((len(popt)/3,3))
-		print popt
-		print pcov
-		print
+
 
 		# Determine velocity (v_r) and dispersion (fwhm) of each line
 		vr[:,ind_i,ind_j], fwhm[:,ind_i,ind_j] = velocity_info(popt, linewave, lineID, c)
@@ -666,10 +697,6 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 		#~ # plot to save to file!
 		#~ figfile = path+dir+date+'_gaussfit_ra%02i%02i_dec%03i%03i.ps' % (j, j+ra_bin, i, i+dec_bin)
 		#~ plot_gaussfit_save(waves4, spectra_0, fit, popt, wave_split_index, figfile)
-
-
-		#~ except:
-			#~ print "Gaussfit didn't work - trying scipy.optimize.leastsq routine instead"
 
 
 
