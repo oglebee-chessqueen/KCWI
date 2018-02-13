@@ -330,21 +330,38 @@ def velocity_info(parms, cen, ID, c):
 
 
 
-def plot_gaussfit_show(waves4, spectra_0, fit, popt):
+def total_flux(waves, parms, ID):
+	'''
+	Calculate total flux in each emission line found in gaussum and
+	return the array of total flux values (to be stored in main program).
+	'''
+	f_tot = numpy.zeros( len(ID) )			# ergs cm-2 s-1
+	for l in range(0, len(parms[:,0])):
+		if numpy.any(ID.index('Buffer')) == l:
+			continue
+		else:
+			lineflux = gaus(waves,parms[l,0],parms[l,1],parms[l,2])
+			f_tot[l] = numpy.sum(lineflux)
+	return vr, fwhm
+
+
+
+
+def plot_gaussfit_show(waves, spectra, fit, parms):
 	'''
 	SHOW plot of Gaussian fits over data,
 	this way can manipulate and see how fits went.
 	'''
 	fig1 = plt.figure()
 	ax2 = fig1.add_subplot(1,1,1)
-	plt.plot(waves4, spectra_0, drawstyle='steps-mid', lw=6,
+	plt.plot(waves, spectra, drawstyle='steps-mid', lw=6,
 					 color='black')
-	plt.plot(waves4, fit, color='green', drawstyle='steps-mid', lw=3)
+	plt.plot(waves, fit, color='green', drawstyle='steps-mid', lw=3)
 	# also plot individual Gaussian fits
 	# Use this loop to determine v_r, fwhm from Gaussian fits
-	for l in range(0, len(popt[:,0])):
-		gfit = gaus(waves4,popt[l,0],popt[l,1],popt[l,2])
-		plt.plot(waves4, gfit, drawstyle='steps-mid', lw=2)
+	for l in range(0, len(parms[:,0])):
+		gfit = gaus(waves,parms[l,0],parms[l,1],parms[l,2])
+		plt.plot(waves, gfit, drawstyle='steps-mid', lw=2)
 	plt.xlabel(r'Wavelength ($\AA$)')
 	plt.ylabel(r'Flux (erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)')
 	plt.show()
@@ -353,7 +370,7 @@ def plot_gaussfit_show(waves4, spectra_0, fit, popt):
 
 
 
-def plot_gaussfit_save(waves4, spectra_0, fit, popt, index, file):
+def plot_gaussfit_save(waves, spectra, fit, parms, index, file):
 	'''
 	SAVE Gaussian fits of emission lines over data, defined at
 	each pixel location.
@@ -367,14 +384,14 @@ def plot_gaussfit_save(waves4, spectra_0, fit, popt, index, file):
 		# total number of figs = wave_split_index - 1
 		ax2 = fig1.add_subplot(img_tot,1,img+1)
 		# plot spectrum and gaussfit over spectrum
-		plt.plot(waves4[i1:i2], spectra_0[i1:i2]*1e15, drawstyle='steps-mid',
+		plt.plot(waves[i1:i2], spectra[i1:i2]*1e15, drawstyle='steps-mid',
 						 lw=5, color='black')
-		plt.plot(waves4[i1:i2], fit[i1:i2]*1e15, color='blue',
+		plt.plot(waves[i1:i2], fit[i1:i2]*1e15, color='blue',
 						 drawstyle='steps-mid', lw=3)
-		for k in range(0, len(popt[:,0])):
-			gfit = gaus(waves4,popt[k,0],popt[k,1],popt[k,2])
-			plt.plot(waves4[i1:i2], gfit[i1:i2]*1e15, drawstyle='steps-mid', lw=1.5)
-		plt.xlim( (waves4[i1],waves4[i2]) )
+		for k in range(0, len(parms[:,0])):
+			gfit = gaus(waves,parms[k,0],parms[k,1],parms[k,2])
+			plt.plot(waves[i1:i2], gfit[i1:i2]*1e15, drawstyle='steps-mid', lw=1.5)
+		plt.xlim( (waves[i1],waves[i2]) )
 		# add axes at appropriate positions
 		if img == (len(index)-2)/2:
 			ax2.set_ylabel(r'Flux (10$^{-15}$ erg cm$^{-2}$ s$^{-1}$ $\AA ^{-1}$)',
@@ -443,6 +460,9 @@ def gaussum(xdata,*params):
 
 
 
+
+
+
 # Define reference path and fits file, dat file here
 '''
 Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
@@ -472,19 +492,20 @@ index2=211		# not ready
 index3=212		# for OII, OIII lines analysis
 index4=213		# all other lines, use this higher S/N data set
 
-intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
+intfile3 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index3,int)		#_extcorr.
+#~ intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
 file3 = path+dir+date+dir+redux+dir+intfile3
 varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
 vfile3 = path+dir+date+dir+redux+dir+varfile3
 
-
-intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
+intfile4 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index4,int)		#_extcorr
+#~ intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
 file4 = path+dir+date+dir+redux+dir+intfile4
 varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
 vfile4 = path+dir+date+dir+redux+dir+varfile4
 
 # Write new datafile (no continuum) out to new file: (at end of program)
-newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_nocontinuum.fits' % (index4,int)
+newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_gaussfit_parms.npz' % (index4,int)
 
 # Read in file, get data + waves from files
 data3, waves3, ra, dec = open_fits(file3)		# data in units erg cm-2 s-1
@@ -518,11 +539,11 @@ wave_split_index = [numpy.where(waves4 == 3600.)[0][0],
 # continuum level(s), and emission line characteristics.
 # Image size is: (wave, 132L, 22L)
 # TEST BINS:
-ra_bin = 1 #numpy.size(data4[0,0,:])/2			# 2
-dec_bin = 1	#33 #numpy.size(data4[0,:,0])/2		# 33
+ra_bin = numpy.size(data4[0,0,:])/2			# 2				 #
+dec_bin = numpy.size(data4[0,:,0])/2		# 33 			 #
 #REAL BINS:
-#~ ra_bin = 2
-#~ dec_bin = 2
+ra_bin = 1
+dec_bin = 1
 
 bin_size = 20		# Bin size of continuum determination in each spectrum
 #~ print 'RA bin: ', ra_bin
@@ -534,10 +555,19 @@ continuum_img = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
 															numpy.size(data4[0,0,:])/ra_bin] )
 chi2 = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
 										 numpy.size(data4[0,0,:])/ra_bin] )
-#~ print numpy.shape(continuum_img)
-#~ print numpy.size(data4[0,:,0])-1
-#~ print numpy.size(data4[0,0,:])-1
-#~ print
+
+# Make arrays to hold Gauss-fit results: v_r, fwhm, and total line flux_bin
+vr = numpy.zeros( [len(linewave),
+									 numpy.size(data4[0,:,0])/dec_bin,
+									 numpy.size(data4[0,0,:])/ra_bin] )
+fwhm = numpy.zeros( numpy.shape(vr) )
+flux_tot = numpy.zeros( numpy.shape(vr) )
+
+# Make an additional array to store Gaussfit parameters per spatial pixels
+# (to re-create Gaussian plots later or get more info as needed, without re-running)
+g_parms = numpy.zeros( [len(linewave)*3,
+												numpy.size(data4[0,:,0])/dec_bin,
+												numpy.size(data4[0,0,:])/ra_bin] )
 
 
 # Plot data image before and after continuum subtraction
@@ -602,11 +632,12 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 		# 5. Now that linewave, lineamp, and linestdv exist, can call gaussum
 		# through the curve_fit routine
 		gauss_parms = define_parms(linewave, lineamp, linestdv)
-		bounds_lower = define_parms(numpy.array(linewave)-5, -5*lineamp, numpy.ones( numpy.size(linestdv) )*-numpy.inf)		# defines the lower limit bounds for curve_fit,
-																																# assuming the same for all elements
-		bounds_lower = tuple( bounds_lower )
-		bounds_upper = define_parms(numpy.array(linewave)+5, 5*lineamp, numpy.ones( numpy.size(lineamp) )*numpy.inf)
-		bounds_upper = tuple( bounds_upper )
+		####### Set Boundaries (But doesn't work!)
+		#~ bounds_lower = define_parms(numpy.array(linewave)-5, -5*lineamp, numpy.ones( numpy.size(linestdv) )*-numpy.inf)		# defines the lower limit bounds for curve_fit,
+																																#~ # assuming the same for all elements
+		#~ bounds_lower = tuple( bounds_lower )
+		#~ bounds_upper = define_parms(numpy.array(linewave)+5, 5*lineamp, numpy.ones( numpy.size(lineamp) )*numpy.inf)
+		#~ bounds_upper = tuple( bounds_upper )
 
 		# This is where we take the gaussum function and use curvefit to find the best-fit
 		# multi-gaussian function across the spectrum!
@@ -617,20 +648,24 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 		fit = gaussum(waves4, *popt)	# Use the best-fit parms to create the emission line spectrum!
 
 		#The optimized parameters for each emission peak is stored here in a 3xn array.
+		g_parms[:,ind_i,ind_j] = popt
 		popt = popt.reshape((len(popt)/3,3))
 		print popt
 		print pcov
 		print
 
 		# Determine velocity (v_r) and dispersion (fwhm) of each line
-		#~ #v_r, fwhm = velocity_info(popt, linewave, lineID, c)
+		vr[:,ind_i,ind_j], fwhm[:,ind_i,ind_j] = velocity_info(popt, linewave, lineID, c)
 
-		# plot the fit!
-		plot_gaussfit_show(waves4, spectra_0, fit, popt)
+		# Determine total flux in Gaussian lines
+		flux_tot[:,ind_i,ind_j] = total_flux(waves4, popt, lineID)
 
-		# plot to save to file!
-		figfile = path+dir+date+'_gaussfit_ra%02i%02i_dec%03i%03i.ps' % (j, j+ra_bin, i, i+dec_bin)
-		plot_gaussfit_save(waves4, spectra_0, fit, popt, wave_split_index, figfile)
+		#~ # plot the fit!
+		#~ plot_gaussfit_show(waves4, spectra_0, fit, popt)
+
+		#~ # plot to save to file!
+		#~ figfile = path+dir+date+'_gaussfit_ra%02i%02i_dec%03i%03i.ps' % (j, j+ra_bin, i, i+dec_bin)
+		#~ plot_gaussfit_save(waves4, spectra_0, fit, popt, wave_split_index, figfile)
 
 
 		#~ except:
@@ -648,55 +683,12 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 
 	ind_i += 1
 
-# Plot after continuum subtraction image of data4
-ax1 = fig1.add_subplot(1,2,2)
-ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
-ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(numpy.sum(data4,axis=0), origin='lower',
-			interpolation="none", cmap='nipy_spectral',
-			extent=[ra[0],ra[-1],dec[0],dec[-1]])
-cbar = plt.colorbar()
-cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
-ax = plt.gca()
-ax.get_xaxis().get_major_formatter().set_useOffset(False)
-ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
-
-
-# Plot total continuum flux image
-fig1 = plt.figure()
-ax1 = fig1.add_subplot(1,2,1)
-ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
-ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(continuum_img, origin='lower',
-						interpolation="none", cmap='CMRmap',#cmap='nipy_spectral',
-						extent=[ra[0],ra[-1],dec[0],dec[-1]])
-cbar = plt.colorbar()
-cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',
-									 weight='bold',size='large')
-ax = plt.gca()
-ax.get_xaxis().get_major_formatter().set_useOffset(False)
-ax.get_yaxis().get_major_formatter().set_useOffset(False)
-
-
-# Plot chi2 statistics map of continuum fit to data
-#fig1 = plt.figure()
-ax1 = fig1.add_subplot(1,2,2)
-ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
-ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(chi2, origin='lower',
-						interpolation="none", cmap='nipy_spectral',
-						extent=[ra[0],ra[-1],dec[0],dec[-1]])
-cbar = plt.colorbar()
-cbar.ax.set_ylabel(r'$\chi ^{2}$ statistic: continuum fit to data',
-									 weight='bold',size='large')
-ax = plt.gca()
-ax.get_xaxis().get_major_formatter().set_useOffset(False)
-ax.get_yaxis().get_major_formatter().set_useOffset(False)
-
-
-plt.show()
-
-
-# Write new datafile (no continuum) out to new file:
-write_fits(newfile,file4,data4)
+# Save v_r, fwhm, tot_flux, g_parms arrays to numpy SAVE file
+# Should  be kept in array format
+# Save keywords:
+# vr = v_r
+# fwhm = fwhm
+# lineflux = tot_flux
+# parms = g_parms
+numpy.savez(newfile, vr=v_r, fwhm=fwhm, lineflux=tot_flux, parms=g_parms)
