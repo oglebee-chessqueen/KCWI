@@ -342,7 +342,7 @@ def total_flux(waves, parms, ID):
 		else:
 			lineflux = gaus(waves,parms[l,0],parms[l,1],parms[l,2])
 			f_tot[l] = numpy.sum(lineflux)
-	return vr, fwhm
+	return f_tot
 
 
 
@@ -492,13 +492,13 @@ index2=211		# not ready
 index3=212		# for OII, OIII lines analysis
 index4=213		# all other lines, use this higher S/N data set
 
-intfile3 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index3,int)		#_extcorr.
+intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
 #~ intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
 file3 = path+dir+date+dir+redux+dir+intfile3
 varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
 vfile3 = path+dir+date+dir+redux+dir+varfile3
 
-intfile4 = 'kb'+date+'_00%03i_%s_extcorr.fits' % (index4,int)		#_extcorr
+intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
 #~ intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
 file4 = path+dir+date+dir+redux+dir+intfile4
 varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
@@ -539,8 +539,8 @@ wave_split_index = [numpy.where(waves4 == 3600.)[0][0],
 # continuum level(s), and emission line characteristics.
 # Image size is: (wave, 132L, 22L)
 # TEST BINS:
-ra_bin = numpy.size(data4[0,0,:])/2			# 2				 #
-dec_bin = numpy.size(data4[0,:,0])/2		# 33 			 #
+#~ ra_bin = numpy.size(data4[0,0,:])/2			# 2				 #
+#~ dec_bin = numpy.size(data4[0,:,0])/2		# 33 			 #
 #REAL BINS:
 ra_bin = 1
 dec_bin = 1
@@ -691,4 +691,4 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 # fwhm = fwhm
 # lineflux = tot_flux
 # parms = g_parms
-numpy.savez(newfile, vr=v_r, fwhm=fwhm, lineflux=tot_flux, parms=g_parms)
+numpy.savez(newfile, v_r=vr, fwhm=fwhm, lineflux=flux_tot, parms=g_parms)
