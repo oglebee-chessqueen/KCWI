@@ -1,3 +1,15 @@
+'''
+Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
+(M57, NGC6720)						211			Small		BH2, Hbeta		60		N
+									212			Small		BL,4500			20		N
+									213			Small		BL,4500			300		N
+						170415		188			Medium		BM,5900			10		N
+						170619		259			Large		BM,4550			1050	Y? (DON'T USE)
+									260			Large		BM,4550			1050	Y?
+									261			Large		BM,4550			950		Y?
+						170620		64			Medium		BM,5200			157		N?
+Units of flux-cal data: erg/s/cm^2/Angstrom
+'''
 from astropy.io import fits
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -52,7 +64,6 @@ def open_fits(file,*args):
 	Grab the data.
 	Get info on wavelength.
 	Get info on observing range (RA,DEC).
-
 	*args - if set, then read in different RA, DEC header value
 	'''
 	hdulist = fits.open(file)		# Open the file
@@ -121,7 +132,26 @@ def narrowband(line, data, wv, dwv_blue, dwv_red, continuum_yn):
 	return data_line, ind_line
 
 
-def mine_ring():
+def sn_cut(data_in, var, sigma):
+	'''
+	Defines the signal-to-noise ratio (SN) cut of the narrowband image!
+	'''
+	#~ snr = data_in/numpy.sqrt(var)
+	data_sn = numpy.zeros( [numpy.size(data_in[:,0,0]), numpy.size(data_in[0,:,0]), numpy.size(data_in[0,0,:])] )
+	#~ data_sn[snr>=sigma] = 0.0
+	for i in range(0,numpy.size(data_in[:,0,0])):
+		for j in range(0,numpy.size(data_in[0,:,0])):
+			for k in range(0,numpy.size(data_in[0,0,:])):
+				snr = data_in[i,j,k]/numpy.sqrt(data_in[i,j,k])	#numpy.sqrt(var[i,j,k])
+				if snr > sigma:
+					data_sn[i,j,k] = data_in[i,j,k]
+				else:
+					continue
+
+	return data_sn
+
+
+def main_ring():
 	'''
 	Use to look at 04/12 data sets (co-added for max S/N)
 	'''
@@ -172,8 +202,7 @@ def mine_ring():
 
 def central_star():
 	'''
-	Use to look at 06/2
-	0 data set (with [NI] ONLY)
+	Use to look at 06/20 data set (with [NI] ONLY)
 	'''
 	############### Main Ring (inner edge) ##################
 	# Line list
@@ -185,7 +214,110 @@ def central_star():
 	int = 'icuber'
 	var = 'vcuber'
 
-	index1 = 64		# not ready
+	index1 = 64		# Spectral Range: ~ 5100 - 5300 (only [NI])
+
+	intfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,int)
+	file1 = path+dir+date+dir+redux+dir+intfile1
+	varfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,var)
+	vfile1 = path+dir+date+dir+redux+dir+varfile1
+
+
+	# Read in file, get important data from files
+	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1)		# data in units erg cm-2 s-1
+	var1, varwv1 = open_fits_err(vfile1)
+
+	# Do things here
+	# 1. Find where data =! 0 or nan
+	wv_range = numpy.where((waves1 > 5060) & (waves1 < 5300))[0]
+	waves1 = waves1[wv_range]
+	data1 = data1[wv_range,:,:]
+	var1 = var1[wv_range,:,:]
+
+	#~ fig1 = plt.figure()
+	#~ ax1 = fig1.add_subplot(1,1,1)
+	#~ plt.plot(waves1,numpy.sum(data1,axis=(1,2)),drawstyle='steps-mid')
+
+	#~ fig2 = plt.figure()
+	#~ ax2 = fig2.add_subplot(1,1,1)
+	#~ plt.imshow(numpy.sum(data1,axis=0), cmap='Reds', origin='lower',
+				#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	#~ plt.imshow(numpy.sum(data_ni,axis=0), cmap='Blues', alpha=0.8, origin='lower',
+				#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+
+	# S/N Cut
+	data_ni, ind_ni = narrowband(NI[0], data1, waves1, 2.0, 0.5, 'y')
+	sigma = 4.5			# 2.75 - good with var
+	data_cut = sn_cut(data_ni, var1[ind_ni,:,:], sigma)
+	fig2 = plt.figure()
+	ax2 = fig2.add_subplot(1,1,1)
+	plt.imshow(numpy.sum(data_cut,axis=0), cmap='gnuplot', origin='lower',	#cmap='gnuplot'
+				vmin = 0, vmax = 100,
+				extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	cbar = plt.colorbar()		# Each image should have its own colorbar
+	ax = plt.gca()
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	plt.show()
+
+
+	return
+
+
+
+def central_star_offset_medium():
+	'''
+	Use to look at 04/15 data set (with [OI], maybe [NII] around stars,
+	and [OI], [NII], [OIII], HeII, and maybe other lines? in Inner Ring)
+	'''
+	############### Main Ring (inner edge) ##################
+	# Line list
+	HeII = [5411]
+	NII = [5755]
+	OI = [5577,6300]
+	OIII = [5592.37]
+	ClIII = [5517, 5537]
+
+	############### Central Region 1: 06/20 ##################
+	date='170415'
+
+	int = 'icubes'
+	var = 'vcubes'
+
+	index1 = 188		# not ready
+
+	intfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,int)
+	file1 = path+dir+date+dir+redux+dir+intfile1
+	varfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,var)
+	vfile1 = path+dir+date+dir+redux+dir+varfile1
+
+
+	# Read in file, get important data from files
+	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1)		# data in units erg cm-2 s-1
+	var1, varwv1 = open_fits_err(vfile1)
+
+	# Do things here
+
+
+
+	return
+
+
+
+def central_star_offset_large():
+	'''
+	Use to look at 06/19 data set of central stars (no clouds) and Inner Ring
+	'''
+	############### Main Ring (inner edge) ##################
+	# Line list
+	NI = [5198.5, 5199]
+
+	############### Central Region 1: 06/20 ##################
+	date='170415'
+
+	int = 'icubes'
+	var = 'vcubes'
+
+	index1 = 188		# not ready
 
 	intfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,int)
 	file1 = path+dir+date+dir+redux+dir+intfile1
@@ -207,56 +339,24 @@ def central_star():
 
 
 
-'''
-Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
-(M57, NGC6720)							211			Small		BH2, Hbeta		60		N
-														212			Small		BL,4500				20		N
-														213			Small		BL,4500				300		N
-									170415		188			Medium	BM,5900				10		N
-									170619		259			Large		BM,4550				1050	Y? (DON'T USE)
-														260			Large		BM,4550				1050	Y?
-														261			Large		BM,4550				950		Y?
-									170620		64			Medium	BM,5200				157		N?
+if __name__ == "__main__":
+	global path, dir, redux
 
-Units of flux-cal data: erg/s/cm^2/Angstrom
-'''
-path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
-dir = '\\'
-redux='redux'
+	#path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
+	#dir = '\\'
+	path='/home/keri/KCWI/'
+	dir = '/'
+	redux='redux'
 
-# Line list
-HI = [4101.73, 4340.47, 4861.35]  	# delta, gamma, beta
-HeI = [3888.65, 3972.02, 4026.19, 4471.48, 4713.15, 4921.93, 5015.68]
-HeII = [4540, 4686, 5411]
-NI = [5198.5, 5199]
-OI = [5577,6300]
-OII = [3726, 3729, 4267, 4661]
-OIII = [4363.21, 4958.91, 5006.84, 5592.37]
+	# Line list
+	HI = [4101.73, 4340.47, 4861.35]  	# delta, gamma, beta
+	HeI = [3888.65, 3972.02, 4026.19, 4471.48, 4713.15, 4921.93, 5015.68]
+	HeII = [4540, 4686, 5411]
+	NI = [5198.5, 5199]
+	OI = [5577,6300]
+	OII = [3726, 3729, 4267, 4661]
+	OIII = [4363.21, 4958.91, 5006.84, 5592.37]
 
 
-
-
-
-
-
-
-
-
-
-
-
-############### Central Region 1: 06/20 ##################
-date='170620'
-
-int = 'icuber'
-var = 'vcuber'
-
-index3 = 64		# not ready
-
-intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)
-file3 = path+dir+date+dir+redux+dir+intfile3
-varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
-vfile3 = path+dir+date+dir+redux+dir+varfile3
-
-
-
+	# Run each function per region probed
+	central_star()		#path,dir,redux)
