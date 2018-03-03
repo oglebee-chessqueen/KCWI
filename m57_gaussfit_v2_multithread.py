@@ -12,6 +12,7 @@
 #
 
 import numpy
+import os
 import numpy.polynomial.polynomial as poly
 from astropy.io import fits
 import matplotlib.pyplot as plt
@@ -46,12 +47,13 @@ def open_fits(file,*args):
 	nwv = numpy.size(data[:,0,0])
 	wvlast = wv0 + nwv*wv_interval
 	all_wv = numpy.arange(wv0, wvlast, wv_interval)		# Defined using known delta(wave) and central wavelength
-
+	# Wavelength array will be off by all_wave[400] - all_wave[0]
+	all_wv = all_wv + (all_wv[400] - all_wv[0])
 	# Limit x, y image area to only include "good" image area
 	# (i.e., no blank space or edge pixels)
 	# Same for wavelength space
 	#~ data = data[400:-300,33:-28,12:-12]
-	all_wv = all_wv[400:-300]
+	#~ all_wv = all_wv[400:-300]
 
 	if len(args) > 0:
 		ra0 = hdulist[0].header['TARGRA']#['CD1_1']		# RA (at center?)
@@ -279,7 +281,7 @@ def subtract_continuum(data,continuum):
 
 
 
-def define_amplitudes(lines, waves, dwave):
+def define_amplitudes(lines, waves, spectrum, dwave):
 	'''
 	Finds the amplitube (max) of the emission line from the line list provided
 	by finding the line in the spectrum and determining the max value of the line.
@@ -289,9 +291,9 @@ def define_amplitudes(lines, waves, dwave):
 	lineamp = numpy.zeros( numpy.size(lines) )
 
 	for ww in lines:
-		i_line = numpy.where((waves <= ww+0.25) & (waves >= ww-0.25))[0]
-		#print ww, i_linewave
-		amp = abs(numpy.max(spectra_0[i_line[0]-dwave:i_line[0]+dwave]))
+		i_line = numpy.where((waves <= ww+0.3) & (waves >= ww-0.3))[0]
+		#~ print ww, i_line
+		amp = abs(numpy.max(spectrum[i_line[0]-dwave:i_line[0]+dwave]))
 		if numpy.isnan(amp):
 			lineamp[i_ww] = lineamp[i_ww-1]
 		else:
@@ -489,25 +491,128 @@ def gaussfit(parms, x0, y0):
 		#~ #popt, pcov, infodict, errmsg, ier = curve_fit(gaussum, x0, y0, p0=parms, full_output=True)		# nope
 	func = lambda p,x,y: gaussum(x,*p) - y
 	popt, pcov, infodict, errmsg, ier = leastsq(func,parms,args=(x0,y0),full_output=True, maxfev = 5000)
-	print popt.reshape((len(popt)/3,3))
-	print pcov
+	#~ print popt.reshape((len(popt)/3,3))
+	#~ print pcov
 		#~ print infodict
 		#~ print errmsg, ier
 		#~ print
 	return popt
 
 
-#~ # If leastsq is invoked, uses func to do model - y
-#~ def func(x,p,y):
-	#~ return gaussum(x, *p) - y
+# Set up pixel operations here (for multi-threading processing)
+def do_gaussfit(input):
+	'''
+	Run the pixel calculations here.
+	Things needed for input:
+	  data, var, wave, i, j, di, dj, linewave, lineID
+	Things needed to output:
+
+	'''
+	file_directory = ""
+	#~ data, var, waves, linewave, lineID, i, j, nfile = input		#
+	data, waves, linewave, lineID, i, j, nfile = input
+	output = []
+	c = 3.0E5
+
+	data_bin = data[:,i,j]
+	#~ var_bin = var[:,i,j]
+
+	# Create spectra (Collapse along x,y axes)
+	spectra = data_bin	#create_spectum(data_bin)
+	#~ err = numpy.sqrt(abs(var_bin)) #create_spectum_err(var_bin)
+
+		#~ # Find continuum fit:
+		#~ # 1. Define a bin size to find medium flux through and extrac new wave, flux
+		#~ #			arrays for continuum
+		#~ wave_bin, flux_bin = fit_continuum_to_spectrum(spectra, waves4, bin_size)
+		#~ #
+		#~ # 2. Use new continuum (flux) array to fit polynomial through entire
+		#~ # 		wavelength range.
+		#~ #			Return continuum array and least-squares min chi2 value of fit to data.
+		#~ continuum_flux, chi2[ind_i,ind_j] = continuum_fit_lsq(wave_bin, flux_bin, waves4, spectra, err)
+		#~ continuum_img[ind_i,ind_j] = numpy.sum(continuum_flux)
+		#~ print 'At [%i - %i, %i - %i] -- Total continuum flux: %.3e   Chi2 = %.3f' % (i, i+dec_bin, j, j+ra_bin, numpy.sum(continuum_flux),chi2[ind_i,ind_j])
+
+	# 3. Subtract continuum flux from spectrum
+	#~ print numpy.size(spectra)
+	#~ spectra_0 = spectra #subtract_continuum(spectra, continuum_flux)
+	#~ print numpy.size(spectra_0)
+
+	# Check for nan's and get right of them
+	for w in range(0,len(spectra)):
+		if spectra[w] <= 0 or numpy.isnan(spectra[w]):
+			spectra[w] = abs(numpy.nanmedian(spectra))
+			#~ err[0] = 0
+
+	# 4. Find amplitudes of each emission line in spectra_0
+	# DO EACH ITERATION - if not and use "guess" from previous iteration,
+	# will think chi2 fit is good enough and won't search parameter space
+	# for better fits...
+	lineamp = define_amplitudes(linewave, waves, spectra, 4)			# dwave = 4, # of indices to look around linecenter for amplitude
+	linestdv = numpy.ones( numpy.size(linewave) )*0.5 	# Std. dev. array w/ guess:
+																											# linewidth = 1
+
+	# 5. Now that linewave, lineamp, and linestdv exist, can call gaussum
+	# through the curve_fit routine
+	gauss_parms = define_parms(linewave, lineamp, linestdv)
+	####### Set Boundaries (But doesn't work!)
+	#~ bounds_lower = define_parms(numpy.array(linewave)-5, -5*lineamp, numpy.ones( numpy.size(linestdv) )*-numpy.inf)		# defines the lower limit bounds for curve_fit,
+																																#~ # assuming the same for all elements
+	#~ bounds_lower = tuple( bounds_lower )
+	#~ bounds_upper = define_parms(numpy.array(linewave)+5, 5*lineamp, numpy.ones( numpy.size(lineamp) )*numpy.inf)
+	#~ bounds_upper = tuple( bounds_upper )
+
+	# This is where we take the gaussum function and use curvefit to find the best-fit
+	# multi-gaussian function across the spectrum!
+	# OPTIMIZATION!
+	print 'Running optimization for: [%i,%i]' % (i,j)
+	popt = gaussfit(gauss_parms, waves, spectra)
+
+	#The optimized parameters for each emission peak is stored here in a 3xn array.
+	#~ g_parms[:,ind_i,ind_j] = popt
+	g_parms = popt
+	popt = popt.reshape((len(popt)/3,3))
+
+	# Determine velocity (v_r) and dispersion (fwhm) of each line
+	#~ vr[:,ind_i,ind_j], fwhm[:,ind_i,ind_j] = velocity_info(popt, linewave, lineID, c)
+	vr, fwhm = velocity_info(popt, linewave, lineID, c)
+
+	# Determine total flux in Gaussian lines
+	#~ flux_tot[:,ind_i,ind_j] = total_flux(waves, popt, lineID)
+	flux_tot = total_flux(waves, popt, lineID)
+
+	print 'Gaussian operations done for [%i, %i]' % (i, j)
+	# Save solutions (per pixel) to numpy.save file (npz)
+	nfile = nfile+'pix%i%i.npz' % (i,j)
+	numpy.savez(nfile, v_r=vr, fwhm=fwhm, lineflux=flux_tot, parms=g_parms)
+	print "Saved parms to: ", nfile
+
+	#~ # plot the fit!
+	#~ fit = gaussum(waves, *popt)	# Use the best-fit parms to create the emission line spectrum!
+	#~ plot_gaussfit_show(waves4, spectra_0, fit, popt)
+
+	#~ # plot to save to file!
+	#~ figfile = path+dir+date+'_gaussfit_ra%02i%02i_dec%03i%03i.ps' % (j, j+ra_bin, i, i+dec_bin)
+	#~ plot_gaussfit_save(waves4, spectra_0, fit, popt, wave_split_index, figfile)
+
+	output.append((g_parms, vr, fwhm, flux_tot, i, j))
+	return output
 
 
 
 
-# Define reference path and fits file, dat file here
-'''
-Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
-(M57, NGC6720)							211			Small		BH2, Hbeta		60		N
+
+
+
+
+#### MAIN PROGRAM ####
+if __name__ == '__main__':
+	mp.freeze_support()			# Need to call on Windows to allow multithreading
+
+	# Define reference path and fits file, dat file here
+	'''
+	Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
+	(M57, NGC6720)							211			Small		BH2, Hbeta		60		N
 														212			Small		BL,4500				20		N
 														213			Small		BL,4500				300		N
 									170415		188			Medium	BM,5900				10		N
@@ -515,207 +620,213 @@ Ring Nebula				170412		210			Small		BH2, Hbeta		60		N
 														260			Large		BM,4550				1050	Y?
 														261			Large		BM,4550				950		Y?
 									170620		64			Medium	BM,5200				157		N?
-Units of flux-cal data: erg/s/cm^2/Angstrom
-'''
-c = 3.0E5
-path='C:\Users\Keri Hoadley\Documents\KCWI'
-dir = '\\'
-#~ path='/home/keri/KCWI'
-#~ dir = '/'
-redux='redux'
-int = 'icubes'
-var = 'vcubes'
+	Units of flux-cal data: erg/s/cm^2/Angstrom
+	'''
+	c = 3.0E5
+	path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
+	dir = '\\'
+	#~ path='/home/keri/KCWI'
+	#~ dir = '/'
+	redux='redux'
+	int = 'icubes'
+	var = 'vcubes'
 
-date='170412'
+	date='170412'
 
-index1=210		# not ready
-index2=211		# not ready
-index3=212		# for OII, OIII lines analysis
-index4=213		# all other lines, use this higher S/N data set
+	index1=210		# not ready
+	index2=211		# not ready
+	index3=212		# for OII, OIII lines analysis
+	index4=213		# all other lines, use this higher S/N data set
 
-intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
-#~ intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
-file3 = path+dir+date+dir+redux+dir+intfile3
-varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
-vfile3 = path+dir+date+dir+redux+dir+varfile3
+	### MUST READ-IN CONTINUUM-SUBTRACTED DATACUBES!! ###
+	#~ intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
+	intfile3 = 'kb'+date+'_00%03i+00%03i_%s_coadd.nocontinuum.fits' % (index1,index2,int)		#_extcorr.
+	file3 = path+dir+date+dir+redux+dir+intfile3
+	#~ varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
+	varfile3 = 'kb'+date+'_00%03i+00%03i_%s_coadd.nocontinuum.fits' % (index1,index2,var)
+	vfile3 = path+dir+date+dir+redux+dir+varfile3
 
-intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
-#~ intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
-file4 = path+dir+date+dir+redux+dir+intfile4
-varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
-vfile4 = path+dir+date+dir+redux+dir+varfile4
+	#~ intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
+	intfile4 = 'kb'+date+'_00%03i+00%03i_%s_coadd.nocontinuum.fits' % (index3,index4,int)		#_extcorr
+	file4 = path+dir+date+dir+redux+dir+intfile4
+	#~ varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
+	varfile4 = 'kb'+date+'_00%03i+00%03i_%s_coadd.nocontinuum.fits' % (index3,index4,var)
+	vfile4 = path+dir+date+dir+redux+dir+varfile4
 
-# Write new datafile (no continuum) out to new file: (at end of program)
-newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_gaussfit_parms.npz' % (index4,int)
+	# Write new datafile (no continuum) out to new file:
+	# AND new directory, since there will be lots of them
+	newdir = '%s' % index4
+	nfile = path+dir+date+dir+redux+dir+newdir+dir+intfile4 #% (index4,int)
+	newfile = nfile.replace('.fits','.gaussfit.')
 
-# Read in file, get data + waves from files
-data3, waves3, ra, dec = open_fits(file3)		# data in units erg cm-2 s-1
-data4, waves4, ra, dec = open_fits(file4)		# data in units erg cm-2 s-1
-var3, varwv3, vra, vdec = open_fits(vfile3)
-var4, varwv4, vra, vdec = open_fits(vfile4)
+	# Read in file, get data + waves from files
+	#~ data3, waves3, ra, dec = open_fits(file3)		# data in units erg cm-2 s-1
+	data4, waves4, ra, dec = open_fits(file4)		# data in units erg cm-2 s-1
+	#~ var3, varwv3, vra, vdec = open_fits(vfile3)
+	#~ var4, varwv4, vra, vdec = open_fits(vfile4)
 
-# Open emission line template file:
-# Important columns in file: Line ID (col 0), Lab Wave (col 2)
-linesfile = date+"_212-213_lines.dat"
+	# Open emission line template file:
+	# Important columns in file: Line ID (col 0), Lab Wave (col 2)
+	#~ linesfile = date+"_210-211_lines.dat"
+	linesfile = date+"_212-213_lines.dat"
 
-# Open DAT file with emission line info
-lineID, linewave = open_lineID(path+dir+linesfile)
+	# Open DAT file with emission line info
+	global lineID, linewave
+	lineID, linewave = open_lineID(path+dir+linesfile)
 
-# For plotting spectrum fits later
-wave_split_index = [numpy.where(waves4 == 3600.)[0][0],
+
+	# For plotting spectrum fits later
+	# For High-res Grating
+	wave_split_index = [numpy.where(waves4 == 4600.)[0][0],
+										numpy.where(waves4 == 4800.)[0][0],
+										numpy.where(waves4 == 5000.)[0][0],
+										numpy.where(waves4 == 5200.)[0][0]]#,
+										#~ numpy.where(waves4 == 5200.)[0][0],
+										#~ numpy.where(waves4 == 5500.)[0][0]]
+
+	# For Low-Res Grating
+	wave_split_index = [numpy.where(waves4 == 3600.)[0][0],
 										numpy.where(waves4 == 4000.)[0][0],
 										numpy.where(waves4 == 4400.)[0][0],
 										numpy.where(waves4 == 4800.)[0][0],
 										numpy.where(waves4 == 5200.)[0][0],
-										numpy.where(waves4 == 5600.)[0][0]]
+										numpy.where(waves4 == 5500.)[0][0]]
 
-# Change to data3 file outputs
-#~ data4 = data3
-#~ var4 = var3
-#~ waves4 = waves3
-#~ newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_nocontinuum.fits' % (index3,int)
+	# Change to data3 file outputs
+	#~ data4 = data3
+	#~ var4 = var3
+	#~ waves4 = waves3
+	#~ file4 = file3
+	#~ newdir = '%s' % index2
+	#~ nfile = path+dir+date+dir+redux+dir+newdir+dir+intfile3 #% (index2,int)
+	#~ newfile = nfile.replace('.fits','.gaussfit.')
 
+	# Define image "bins" to loop through and find spectra,
+	# continuum level(s), and emission line characteristics.
+	# Image size is: (wave, 132L, 22L)
+	# TEST BINS:
+	#~ ra_bin = numpy.size(data4[0,0,:])/2			# 2				 #
+	#~ dec_bin = numpy.size(data4[0,:,0])/2		# 33 			 #
+	#REAL BINS:
+	ra_bin = 1
+	dec_bin = 1
 
-# Define image "bins" to loop through and find spectra,
-# continuum level(s), and emission line characteristics.
-# Image size is: (wave, 132L, 22L)
-# TEST BINS:
-#~ ra_bin = numpy.size(data4[0,0,:])/2			# 2				 #
-#~ dec_bin = numpy.size(data4[0,:,0])/2		# 33 			 #
-#REAL BINS:
-ra_bin = 1
-dec_bin = 1
+	bin_size = 20		# Bin size of continuum determination in each spectrum
+	#~ print 'RA bin: ', ra_bin
+	#~ print 'DEC bin: ', dec_bin
+	#~ print
 
-bin_size = 20		# Bin size of continuum determination in each spectrum
-#~ print 'RA bin: ', ra_bin
-#~ print 'DEC bin: ', dec_bin
-#~ print
+	#~ # Make a continuum flux 2D array with size of total # of elements in ra, dec_bin
+	#~ continuum_img = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
+															#~ numpy.size(data4[0,0,:])/ra_bin] )
+	#~ chi2 = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
+										 #~ numpy.size(data4[0,0,:])/ra_bin] )
 
-# Make a continuum flux 2D array with size of total # of elements in ra, dec_bin
-continuum_img = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
-															numpy.size(data4[0,0,:])/ra_bin] )
-chi2 = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
-										 numpy.size(data4[0,0,:])/ra_bin] )
-
-# Make arrays to hold Gauss-fit results: v_r, fwhm, and total line flux_bin
-vr = numpy.zeros( [len(linewave),
+	# Make arrays to hold Gauss-fit results: v_r, fwhm, and total line flux_bin
+	vr = numpy.zeros( [len(linewave),
 									 numpy.size(data4[0,:,0])/dec_bin,
 									 numpy.size(data4[0,0,:])/ra_bin] )
-fwhm = numpy.zeros( numpy.shape(vr) )
-flux_tot = numpy.zeros( numpy.shape(vr) )
+	fwhm = numpy.zeros( numpy.shape(vr) )
+	flux_tot = numpy.zeros( numpy.shape(vr) )
 
-# Make an additional array to store Gaussfit parameters per spatial pixels
-# (to re-create Gaussian plots later or get more info as needed, without re-running)
-g_parms = numpy.zeros( [len(linewave)*3,
+	# Make an additional array to store Gaussfit parameters per spatial pixels
+	# (to re-create Gaussian plots later or get more info as needed, without re-running)
+	g_parms = numpy.zeros( [len(linewave)*3,
 												numpy.size(data4[0,:,0])/dec_bin,
 												numpy.size(data4[0,0,:])/ra_bin] )
 
+	# Create a python list as argument for mp pool
+	imglist = []
 
-# Plot data image before and after continuum subtraction
-fig1 = plt.figure()
-ax1 = fig1.add_subplot(1,2,1)
-ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
-ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(numpy.sum(data4,axis=0), origin='lower',
-			interpolation="none", cmap='nipy_spectral',
-			extent=[ra[0],ra[-1],dec[0],dec[-1]])
-cbar = plt.colorbar()
-cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
-ax = plt.gca()
-ax.get_xaxis().get_major_formatter().set_useOffset(False)
-ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	ind_i = 0
+	# Loop through ra, dec bin sizes and do spectral operations
+	for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
+		ind_j = 0
+		for j in range(0,numpy.size(data4[0,0,:]),ra_bin):
+			#~ print 'Analyzing for pixels: RA [%i, %i], DEC [%i, %i]' %
+			#~ 				(j, j+ra_bin, i, i+dec_bin)
+			#~ imglist.append((data4, var4, waves4, linewave, lineID, i, j, newfile))	#
+			imglist.append((data4, waves4, linewave, lineID, i, j, newfile))
+			ind_j += 1
 
-
-ind_i = 0
-
-# Loop through ra, dec bin sizes and do spectral operations
-for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
-	ind_j = 0
-	for j in range(0,numpy.size(data4[0,0,:]),ra_bin):
-		#~ print 'Analyzing for pixels: RA [%i, %i], DEC [%i, %i]' %
-		#~ 				(j, j+ra_bin, i, i+dec_bin)
-
-		data_bin = data4[:,i:i+dec_bin,j:j+ra_bin]
-		var_bin = var4[:,i:i+dec_bin,j:j+ra_bin]
-
-		# Create spectra (Collapse along x,y axes)
-		spectra = create_spectum(data_bin)
-		err = create_spectum_err(var_bin)
-
-		# Find continuum fit:
-		# 1. Define a bin size to find medium flux through and extrac new wave, flux
-		#			arrays for continuum
-		wave_bin, flux_bin = fit_continuum_to_spectrum(spectra, waves4, bin_size)
-		#
-		# 2. Use new continuum (flux) array to fit polynomial through entire
-		# 		wavelength range.
-		#			Return continuum array and least-squares min chi2 value of fit to data.
-		continuum_flux, chi2[ind_i,ind_j] = continuum_fit_lsq(wave_bin, flux_bin, waves4, spectra, err)
-		continuum_img[ind_i,ind_j] = numpy.sum(continuum_flux)
-		print 'At [%i - %i, %i - %i] -- Total continuum flux: %.3e   Chi2 = %.3f' % (i, i+dec_bin, j, j+ra_bin, numpy.sum(continuum_flux),chi2[ind_i,ind_j])
-
-		# 3. Subtract continuum flux from spectrum
-		spectra_0 = subtract_continuum(spectra, continuum_flux)
-		# Check for nan's and get right of them
-		for w in range(0,len(spectra_0)):
-			if spectra_0[w] <= 0 or numpy.isnan(spectra_0[w]):
-				spectra_0[w] = abs(numpy.nanmedian(spectra_0))
-				err[0] = 0
-
-		# 4. Find amplitudes of each emission line in spectra_0
-		# DO EACH ITERATION - if not and use "guess" from previous iteration,
-		# will think chi2 fit is good enough and won't search parameter space
-		# for better fits...
-		lineamp = define_amplitudes(linewave, waves4, 4)			# dwave = 4, # of indices to look around linecenter for amplitude
-		linestdv = numpy.ones( numpy.size(linewave) )*0.5 	# Std. dev. array w/ guess:
-																												# linewidth = 1
-
-		# 5. Now that linewave, lineamp, and linestdv exist, can call gaussum
-		# through the curve_fit routine
-		gauss_parms = define_parms(linewave, lineamp, linestdv)
-		####### Set Boundaries (But doesn't work!)
-		#~ bounds_lower = define_parms(numpy.array(linewave)-5, -5*lineamp, numpy.ones( numpy.size(linestdv) )*-numpy.inf)		# defines the lower limit bounds for curve_fit,
-																																#~ # assuming the same for all elements
-		#~ bounds_lower = tuple( bounds_lower )
-		#~ bounds_upper = define_parms(numpy.array(linewave)+5, 5*lineamp, numpy.ones( numpy.size(lineamp) )*numpy.inf)
-		#~ bounds_upper = tuple( bounds_upper )
-
-		# This is where we take the gaussum function and use curvefit to find the best-fit
-		# multi-gaussian function across the spectrum!
-		# OPTIMIZATION!
-		popt = gaussfit(gauss_parms, waves4, spectra_0)
-
-		fit = gaussum(waves4, *popt)	# Use the best-fit parms to create the emission line spectrum!
-
-		#The optimized parameters for each emission peak is stored here in a 3xn array.
-		g_parms[:,ind_i,ind_j] = popt
-		popt = popt.reshape((len(popt)/3,3))
+		ind_i += 1
 
 
-		# Determine velocity (v_r) and dispersion (fwhm) of each line
-		vr[:,ind_i,ind_j], fwhm[:,ind_i,ind_j] = velocity_info(popt, linewave, lineID, c)
+	# Define and start multithreading processes here!
+	n_cpus = 5
 
-		# Determine total flux in Gaussian lines
-		flux_tot[:,ind_i,ind_j] = total_flux(waves4, popt, lineID)
+	pool = mp.Pool(n_cpus)
+	output = pool.map(do_gaussfit, imglist)
+	#~ output = do_gaussfit(imglist[0])
 
-		#~ # plot the fit!
-		plot_gaussfit_show(waves4, spectra_0, fit, popt)
+	#(save to separate fits file - after end of loop)
+	# take the average of continuum flux over bin sizes
+	# Outputs:
+	# line[0] - popt
+	# line[1] - vr
+	# line[2] - fwhm
+	# line[3] - flux_tot
+	# line[4] - i
+	# line[5] - j
+	for line in output:
+		#~ print line
+		#~ print
+		#~ print line[0][0]
+		#~ print
+		#~ print line[0][1]
+		#~ print
+		#~ print line[0][2]
+		#~ print
+		#~ print line[0][3]
+		#~ print
+		#~ print line[0][4]
+		#~ print
+		#~ print line[0][5]
+		#~ print
+		try:
+			i = line[0][4]
+			j = line[0][5]
+		except:
+			print 'Cannot pull i,j indices for some reason; continuing...'
+			continue
+		#~ print i, j
+		g_parms[:,i,j] = line[0][0]
+		vr[:,i,j] = line[0][1]
+		fwhm[:,i,j] = line[0][2]
+		flux_tot[:,i,j] = line[0][3]
+		#~ print numpy.shape(g_parms)
 
-		#~ # plot to save to file!
-		#~ figfile = path+dir+date+'_gaussfit_ra%02i%02i_dec%03i%03i.ps' % (j, j+ra_bin, i, i+dec_bin)
-		#~ plot_gaussfit_save(waves4, spectra_0, fit, popt, wave_split_index, figfile)
 
+	# Save each new Gaussian-produced model array
+	# to individual fits files.
+	# Can then go through the image maps of each modeled
+	# line and see what is there!
+	# (Maybe include continuum??) -- or make sure to save continuum results
+	# to their own fits files.
+	# 1. v_r for all wavelengths
+	newfile= file4.replace('.fits','.vrad.fits')
+	if os.path.exists(newfile):
+		os.remove(newfile)
+	fits.writeto(newfile, vr, overwrite=True)
 
+	# 2. v_disp for all wavelengths
+	newfile= file4.replace('.fits','.vdisp.fits')
+	if os.path.exists(newfile):
+		os.remove(newfile)
+	fits.writeto(newfile, fwhm, overwrite=True)
 
-		# (save to separate fits file - after end of loop)
-		# take the average of continuum flux over bin sizes
-		for m in range(i,i+dec_bin):
-			for l in range(j,j+ra_bin):
-				data4[:,m,l] = data4[:,m,l] - continuum_flux/(dec_bin*ra_bin)
+	# 3. total flux for all wavelengths
+	newfile= file4.replace('.fits','.lineflux.fits')
+	if os.path.exists(newfile):
+		os.remove(newfile)
+	fits.writeto(newfile, flux_tot, overwrite=True)
 
-		ind_j += 1
+	# 4. gaussian parameters determines for all lines per pixel
+	newfile= file4.replace('.fits','.gaussparms.fits')
+	if os.path.exists(newfile):
+		os.remove(newfile)
+	fits.writeto(newfile, g_parms, overwrite=True)
 
-	ind_i += 1
 
 
 # Save v_r, fwhm, tot_flux, g_parms arrays to numpy SAVE file
@@ -725,4 +836,4 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 # fwhm = fwhm
 # lineflux = tot_flux
 # parms = g_parms
-numpy.savez(newfile, v_r=vr, fwhm=fwhm, lineflux=flux_tot, parms=g_parms)
+#~ numpy.savez(newfile, v_r=vr, fwhm=fwhm, lineflux=flux_tot, parms=g_parms)

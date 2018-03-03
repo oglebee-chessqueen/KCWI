@@ -11,6 +11,7 @@
 #
 #
 
+import os
 import numpy
 import numpy.polynomial.polynomial as poly
 from astropy.io import fits
@@ -42,8 +43,9 @@ def open_fits(file,*args):
 	# Limit x, y image area to only include "good" image area
 	# (i.e., no blank space or edge pixels)
 	# Same for wavelength space
-	data = data[400:-300,33:-28,12:-12]
-	all_wv = all_wv[400:-300]
+	#~ data = data[:,33:-28,12:-12]		#400:-300
+	#~ all_wv = all_wv[400:-300]
+	#~ all_wv = all_wv + (all_wv[400] - all_wv[0])
 
 	if len(args) > 0:
 		ra0 = hdulist[0].header['TARGRA']#['CD1_1']		# RA (at center?)
@@ -51,6 +53,9 @@ def open_fits(file,*args):
 	else:
 		ra0 = hdulist[0].header['RA']		# RA (at center?)
 		dec0 = hdulist[0].header['DEC']		# DEC (at center?)
+
+	#~ ra0_deg = hdulist[0].header['CRVAL1']		# RA (at center?)
+	#~ dec0_deg = hdulist[0].header['CRVAL2']		# DEC (at center?)
 
 	hr = numpy.int(ra0[0:2])
 	min = numpy.int(ra0[3:5])
@@ -76,6 +81,8 @@ def open_fits(file,*args):
 
 	#~ print all_dec[33], all_dec[-28], all_ra[12],all_ra[-12]
 	#~ print
+	print ra0_deg, delta_ra, ra_lim
+	print all_ra
 
 	return data, all_wv, all_ra, all_dec
 
@@ -199,7 +206,7 @@ def fit_continuum_to_spectrum(spectrum, waves, bin_size):
 
 
 
-def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
+def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err, wv_range):
 	'''
 	Use continuum binned arrays to find a polynomial fit through the flux continuum.
 	Loop through each polynomial fit, and find least-squares statistic between
@@ -223,7 +230,7 @@ def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 	best_continuum_array
 	'''
 	# Use the numpy polyfit functions
-	max_index = 10
+	max_index = 15
 	ls = numpy.zeros( max_index )
 	#~ ls_min = 0
 	#~ continuum_array = numpy.array()
@@ -231,20 +238,25 @@ def continuum_fit_lsq(wave_bin, flux_bin, waves, flux, err):
 		poly_coeffs = poly.polyfit(wave_bin[1:-1], flux_bin[1:-1], i)		# find best coefficients through continuum values
 		#cfit = poly.Polynomial(poly_coeffs)			# leave it in functional form (do cfit(waves))
 		cfit = poly.polyval(waves,poly_coeffs)	# fit coefficients through wavelength of spectrum
+
+		#~ fig1 = plt.figure()
+		#~ ax1 = fig1.add_subplot(1,1,1)
 		#~ plt.semilogy(wave_bin[1:-1],flux_bin[1:-1],drawstyle='steps-mid',color='black',lw=3)
-		#~ plt.semilogy(waves,cfit,color='red',lw=3)
 		#~ plt.semilogy(waves,flux,drawstyle='steps-mid',color='blue',lw=3)
+		#~ plt.semilogy(waves,cfit,color='red',lw=3)
+		#~ plt.axvline(waves[300],color='red')
+		#~ plt.axvline(waves[-300],color='red')
 		#~ plt.show()
 		# Perform least-squares between cfit and flux:
 		# 							[ (flux[i] - cfit[i])**2 ]
 		#				LS = SUM|----------------------- |
 		#								[       err[i]**2				 ]
-		for k in range(0,numpy.size(waves)):
+		for k in range(800,numpy.size(waves)-900):		#wv_range[0],wv_range[-1]):
 			if flux[k] <= 0 or numpy.isnan(flux[k]):
 				continue
 			else:
 				ls[i] += (flux[k] - cfit[k])**2 / (err[k]**2)
-		ls[i] = ls[i]/(numpy.size(waves)) # - numpy.size(poly_coeffs))
+		ls[i] = ls[i]/(numpy.size(waves)-800) # - numpy.size(poly_coeffs))
 
 		#~ print 'Polynomial: %i - Least-squares: %0.3f' %(i,ls[i])
 
@@ -272,6 +284,42 @@ def subtract_continuum(data,continuum):
 
 
 
+def calc_EW(waves, i_Hb, EW_Hb, continuum, spectrum, w_Hb):
+	'''
+	Find the total area of continuum needed to match the total flux in Hbeta.
+	Should output d_continuum (in wavelength, Angstroms) as one scalar.
+	'''
+	fcont = numpy.mean(continuum[w_Hb])
+	#~ print EW_Hb/(fcont), 1400. - EW_Hb/(fcont)
+	EW = 1400. - EW_Hb/(fcont)
+	# Loop through +/- 1 dwave through the continuum flux
+	#~ for i in range(1,numpy.size(waves),1):
+		#~ # Find total flux in continuum between waves[i_Hb]+/-i
+		#~ fcont = numpy.sum(continuum[i_Hb-i:i_Hb+i])
+		#~ if i == 1:
+			#~ print EW_Hb/(fcont/3)
+			#~ EW = EW_Hb/(fcont/3)
+			#~ break
+		#~ # Check if fcont >= EW_Hb. If so, store dwave and break from FOR loop
+		#~ if fcont*(waves[i_Hb+i] - waves[i_Hb-i]) >= EW_Hb*waves[i_Hb]:
+			#~ EW = waves[i_Hb+i] - waves[i_Hb-i]
+			#~ break
+		#~ else:
+			#~ continue
+	#~ print EW
+
+	# Plot the spectrum to show areas of Hb and continuum
+	#~ fig1 = plt.figure()
+	#~ ax1 = fig1.add_subplot(1,1,1)
+	#~ plt.plot(waves, spectrum, drawstyle='steps-mid', color='black', lw=5)
+	#~ plt.plot(waves[w_Hb], spectrum[w_Hb], color='red', lw=3)
+	#~ plt.plot(waves[i_Hb-i:i_Hb+i], continuum[i_Hb-i:i_Hb+i],color='blue')
+	#~ plt.xlim(waves[i_Hb]-200,waves[i_Hb]+200)
+	#~ plt.show()
+
+	return EW
+
+
 
 
 
@@ -294,57 +342,94 @@ dir = '\\'
 #~ path='/home/keri/KCWI'
 #~ dir = '/'
 redux='redux'
-int = 'icubes'
-var = 'vcubes'
+int = 'icuber'
+var = 'vcuber'
 
-date='170412'
+#~ date='170412'
+#~ date='170415'
+date='170620'
 
-index1=210		# not ready
-index2=211		# not ready
-index3=212		# for OII, OIII lines analysis
-index4=213		# all other lines, use this higher S/N data set
+#~ index1=210		# not ready
+#~ index2=211		# not ready
+#~ index3=212		# for OII, OIII lines analysis
+#~ index4=213		# all other lines, use this higher S/N data set
+#~ index4=188		# all other lines, use this higher S/N data set
+index4=64		# all other lines, use this higher S/N data set
 
-intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
-file3 = path+dir+date+dir+redux+dir+intfile3
-varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
-vfile3 = path+dir+date+dir+redux+dir+varfile3
+#~ intfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)		#_extcorr.
+#~ intfile3 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,int)		#_extcorr.
+#~ file3 = path+dir+date+dir+redux+dir+intfile3
+#~ varfile3 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
+#~ varfile3 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,var)
+#~ vfile3 = path+dir+date+dir+redux+dir+varfile3
 
 
 intfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,int)		#_extcorr
+#~ intfile4 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index3,index4,int)		#_extcorr
 file4 = path+dir+date+dir+redux+dir+intfile4
 varfile4 = 'kb'+date+'_00%03i_%s.fits' % (index4,var)
+#~ varfile4 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index3,index4,var)
 vfile4 = path+dir+date+dir+redux+dir+varfile4
 
 # Write new datafile (no continuum) out to new file: (at end of program)
-newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_nocontinuum.fits' % (index4,int)
+newfile = file4.replace('.fits','.nocontinuum.fits')
+newvfile = vfile4.replace('.fits','.nocontinuum.fits')
 
 # Read in file, get data + waves from files
-data3, waves3, ra, dec = open_fits(file3)		# data in units erg cm-2 s-1
+#~ data3, waves3, ra, dec = open_fits(file3)		# data in units erg cm-2 s-1
 data4, waves4, ra, dec = open_fits(file4)		# data in units erg cm-2 s-1
-var3, varwv3, vra, vdec = open_fits(vfile3)
+#~ var3, varwv3, vra, vdec = open_fits(vfile3)
 var4, varwv4, vra, vdec = open_fits(vfile4)
 
 # Open emission line template file:
 # Important columns in file: Line ID (col 0), Lab Wave (col 2)
-linesfile = date+"_212-213_lines.dat"
+#~ linesfile = date+"_212-213_lines.dat"
+#~ linesfile = date+"_210-211_lines.dat"
 
 # Open DAT file with emission line info
-lineID, linewave = open_lineID(path+dir+linesfile)
+#~ lineID, linewave = open_lineID(path+dir+linesfile)
 
 # For plotting spectrum fits later
-wave_split_index = [numpy.where(waves4 == 3600.)[0][0],
-										numpy.where(waves4 == 4000.)[0][0],
-										numpy.where(waves4 == 4400.)[0][0],
-										numpy.where(waves4 == 4800.)[0][0],
-										numpy.where(waves4 == 5200.)[0][0],
-										numpy.where(waves4 == 5600.)[0][0]]
+#~ wave_split_index = [numpy.where(waves4 == 3600.)[0][0],
+										#~ numpy.where(waves4 == 4000.)[0][0],
+										#~ numpy.where(waves4 == 4400.)[0][0],
+										#~ numpy.where(waves4 == 4800.)[0][0],
+										#~ numpy.where(waves4 == 5200.)[0][0],
+										#~ numpy.where(waves4 == 5600.)[0][0]]
 
 # Change to data3 file outputs
 #~ data4 = data3
 #~ var4 = var3
 #~ waves4 = waves3
-#~ newfile = path+dir+date+dir+redux+dir+'kb'+date+'_00%03i_%s_nocontinuum.fits' % (index3,int)
+#~ file4 = file3
+#~ vfile4 = vfile3
+#~ newfile = file4.replace('.fits','.nocontinuum.fits')
+#~ newvfile = vfile4.replace('.fits','.nocontinuum.fits')
 
+data4[numpy.isnan(data4)] = 0
+data4[data4<0] = 0	#numpy.average(data4)
+data4[data4>100*numpy.average(data4)] = numpy.average(data4)
+
+# Define regioin between wave_good_start and wave_good_end
+# will change per data set, so keep track of this!
+# 170415
+wave_good_start = 5500	#5060
+wave_good_end = 6350	# 5300
+# 170620
+wave_good_start = 5060
+wave_good_end = 5300
+wv_range = numpy.where((waves4 > wave_good_start) & (waves4 < wave_good_end))[0]
+print wv_range
+#~ waves4 = waves4[wv_range]
+#~ data4 = data4[wv_range,:,:]
+#~ var4 = var4[wv_range,:,:]
+
+
+# Find where Hbeta is to
+#~ Hb = linewave[lineID.index('Hbeta')]
+#~ wv_Hb = numpy.where( (waves4 <= Hb+10.) & (waves4 >= Hb-10.) )[0]
+#~ cen_Hb = numpy.where( (waves4 <= Hb+0.3) & (waves4 >= Hb-0.3) )[0]
+#~ cen_Hb = cen_Hb[0]
 
 # Define image "bins" to loop through and find spectra,
 # continuum level(s), and emission line characteristics.
@@ -362,14 +447,18 @@ bin_size = 20		# Bin size of continuum determination in each spectrum
 #~ print
 
 # Make a continuum flux 2D array with size of total # of elements in ra, dec_bin
-continuum_img = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
+continuum_img = numpy.zeros( [numpy.size(data4[:,0,0]),
+															numpy.size(data4[0,:,0])/dec_bin,
 															numpy.size(data4[0,0,:])/ra_bin] )
 chi2 = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
 										 numpy.size(data4[0,0,:])/ra_bin] )
-#~ print numpy.shape(continuum_img)
-#~ print numpy.size(data4[0,:,0])-1
-#~ print numpy.size(data4[0,0,:])-1
-#~ print
+# Create an EW array, which compares the total flux in Hbeta to the total
+# continuum area needed to match the flux in Hbeta.
+# Gives a measure of the temperature of (cooler?) gas.
+#~ EW_continuum = numpy.zeros( [numpy.size(data4[0,:,0])/dec_bin,
+										 #~ numpy.size(data4[0,0,:])/ra_bin] )
+
+
 
 
 # Plot data image before and after continuum subtraction
@@ -377,16 +466,17 @@ fig1 = plt.figure()
 ax1 = fig1.add_subplot(1,2,1)
 ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
 ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(numpy.sum(data4,axis=0), origin='lower',
-			interpolation="none", cmap='nipy_spectral',
+plt.imshow(numpy.sum(data4[wv_range,:,:],axis=0), origin='lower',
+			interpolation="none", cmap='CMRmap',#cmap='nipy_spectral',
 			extent=[ra[0],ra[-1],dec[0],dec[-1]])
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
 ax = plt.gca()
 ax.get_xaxis().get_major_formatter().set_useOffset(False)
 ax.get_yaxis().get_major_formatter().set_useOffset(False)
+#plt.show()
 
-
+print ra[0], ra[-1]
 ind_i = 0
 
 # Loop through ra, dec bin sizes and do spectral operations
@@ -396,24 +486,28 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 		#~ print 'Analyzing for pixels: RA [%i, %i], DEC [%i, %i]' %
 		#~ 				(j, j+ra_bin, i, i+dec_bin)
 
-		data_bin = data4[:,i:i+dec_bin,j:j+ra_bin]
-		var_bin = var4[:,i:i+dec_bin,j:j+ra_bin]
+		#~ data_bin = data4[:,i:i+dec_bin,j:j+ra_bin]
+		#~ var_bin = var4[:,i:i+dec_bin,j:j+ra_bin]
+
+		data_bin = data4[:,i,j]
+		var_bin = var4[:,i,j]
 
 		# Create spectra (Collapse along x,y axes)
-		spectra = create_spectum(data_bin)
-		err = create_spectum_err(var_bin)
+		spectra = data_bin#create_spectum(data_bin)
+		err = numpy.sqrt(abs(var_bin)) #create_spectum_err(var_bin)
 
 		# Find continuum fit:
 		# 1. Define a bin size to find medium flux through and extrac new wave, flux
 		#			arrays for continuum
-		wave_bin, flux_bin = fit_continuum_to_spectrum(spectra, waves4, bin_size)
+		wave_bin, flux_bin = fit_continuum_to_spectrum(spectra[wv_range], waves4[wv_range], bin_size)
 		#
 		# 2. Use new continuum (flux) array to fit polynomial through entire
 		# 		wavelength range.
 		#			Return continuum array and least-squares min chi2 value of fit to data.
-		continuum_flux, chi2[ind_i,ind_j] = continuum_fit_lsq(wave_bin, flux_bin, waves4, spectra, err)
-		continuum_img[ind_i,ind_j] = numpy.sum(continuum_flux)
+		continuum_flux, chi2[ind_i,ind_j] = continuum_fit_lsq(wave_bin, flux_bin, waves4, spectra, err, wv_range)
+		continuum_img[:,ind_i,ind_j] =  continuum_flux
 		print 'At [%i - %i, %i - %i] -- Total continuum flux: %.3e   Chi2 = %.3f' % (i, i+dec_bin, j, j+ra_bin, numpy.sum(continuum_flux),chi2[ind_i,ind_j])
+
 
 		# 3. Subtract continuum flux from spectrum
 		spectra_0 = subtract_continuum(spectra, continuum_flux)
@@ -422,6 +516,11 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 			if spectra_0[w] <= 0 or numpy.isnan(spectra_0[w]):
 				spectra_0[w] = abs(numpy.nanmedian(spectra_0))
 				err[0] = 0
+
+		# Use continuum_flux array to find delta_wave where EW_continuum == EW_Hb
+		#~ EW_Hb = numpy.sum(spectra_0[wv_Hb])		# Total flux in Hb line
+		#~ EW_continuum[ind_i,ind_j] = calc_EW(waves4, cen_Hb, EW_Hb, continuum_flux, spectra, wv_Hb)
+
 
 		#### PLOTTING OPTIONS (to check what continuum subtraction/create is doing) #####
 		#~ # Plot spectra (log)
@@ -463,12 +562,23 @@ for i in range(0,numpy.size(data4[0,:,0]),dec_bin):
 
 	ind_i += 1
 
+# Again, make sure no parts of data4 are nan or left out
+data4[numpy.isnan(data4)] = 0
+data4[numpy.isinf(data4)] = 0
+data4[data4<0] = 0
+var4[numpy.isnan(var4)] = 0
+var4[numpy.isinf(var4)] = 0
+var4[var4<0] = 0
+continuum_img[numpy.isnan(continuum_img)] = 0
+
+
+
 # Plot after continuum subtraction image of data4
 ax1 = fig1.add_subplot(1,2,2)
 ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
 ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(numpy.sum(data4,axis=0), origin='lower',
-			interpolation="none", cmap='nipy_spectral',
+plt.imshow(numpy.sum(data4[wv_range,:,:],axis=0), origin='lower',
+			interpolation="none", cmap='CMRmap',# cmap='nipy_spectral',
 			extent=[ra[0],ra[-1],dec[0],dec[-1]])
 cbar = plt.colorbar()
 cbar.ax.set_ylabel(r'Total continuum flux (erg cm$^{-2}$ s$^{-1}$)',weight='bold',size='large')
@@ -483,7 +593,7 @@ fig1 = plt.figure()
 ax1 = fig1.add_subplot(1,2,1)
 ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
 ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(continuum_img, origin='lower',
+plt.imshow(numpy.sum(continuum_img[300:-400],axis=0), origin='lower',
 						interpolation="none", cmap='CMRmap',#cmap='nipy_spectral',
 						extent=[ra[0],ra[-1],dec[0],dec[-1]])
 cbar = plt.colorbar()
@@ -498,7 +608,7 @@ ax.get_yaxis().get_major_formatter().set_useOffset(False)
 ax1 = fig1.add_subplot(1,2,2)
 ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
 ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-plt.imshow(chi2, origin='lower',
+plt.imshow(chi2, origin='lower', vmin = 0, #vmax = 250,
 						interpolation="none", cmap='nipy_spectral',
 						extent=[ra[0],ra[-1],dec[0],dec[-1]])
 cbar = plt.colorbar()
@@ -509,8 +619,30 @@ ax.get_xaxis().get_major_formatter().set_useOffset(False)
 ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 
+
+#~ # Plot the equivalent width measurement through the ring
+#~ fig1 = plt.figure()
+#~ ax1 = fig1.add_subplot(1,1,1)
+#~ ax1.set_xlabel(r'$\alpha$ ($^{\circ}$)',weight='bold',size='large')
+#~ ax1.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
+#~ plt.imshow(EW_continuum, origin='lower',
+						#~ interpolation="none", cmap='nipy_spectral', #cmap='CMRmap',#
+						#~ extent=[ra[0],ra[-1],dec[0],dec[-1]])
+#~ cbar = plt.colorbar()
+#~ cbar.ax.set_ylabel(r'H$\beta$ Equivalent Width ($\AA$)',
+									 #~ weight='bold',size='large')
+#~ ax = plt.gca()
+#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
+#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+
 plt.show()
 
 
 # Write new datafile (no continuum) out to new file:
 write_fits(newfile,file4,data4)
+# Write continuum to a new file
+newcfile = file4.replace('.fits','.continuum.fits')
+write_fits(newcfile,file4,continuum_img)
+write_fits(newvfile,vfile4,var4)		# also save variance cube with correct size
+
