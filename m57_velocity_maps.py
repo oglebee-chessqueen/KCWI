@@ -233,6 +233,8 @@ def central_star():
 	data1 = data1[wv_range,:,:]
 	var1 = var1[wv_range,:,:]
 
+	# Define emission lines to
+
 	#~ fig1 = plt.figure()
 	#~ ax1 = fig1.add_subplot(1,1,1)
 	#~ plt.plot(waves1,numpy.sum(data1,axis=(1,2)),drawstyle='steps-mid')
