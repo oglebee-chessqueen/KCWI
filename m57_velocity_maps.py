@@ -12,15 +12,19 @@ Units of flux-cal data: erg/s/cm^2/Angstrom
 '''
 from astropy.io import fits
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
+#~ from matplotlib.colors import LogNorm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.patches as patches
 import numpy
 import numpy.polynomial.polynomial as poly
 from scipy.optimize import curve_fit
 from scipy.optimize import leastsq
 from scipy.ndimage.filters import gaussian_filter
+from scipy.stats import ks_2samp, ttest_ind
 import scipy.ndimage
 plt.rcParams["font.family"] = "serif"
-
+plt.rcParams['axes.facecolor']='white'
+plt.rcParams['savefig.facecolor']='white'
 
 
 def open_fits_err(file,*args):
@@ -134,6 +138,121 @@ def narrowband(line, data, wv, dwv_blue, dwv_red, continuum_yn):
 		data_line = data[ind_line,:,:]
 
 	return data_line, ind_line
+
+
+def plot_velocity_double(velocity, contours, lvls, lwds, ra, dec, ID, line, min, max, color, cbar_label):
+	'''
+	Plot doublet velocity distribution(s), including contour regions.
+	'''
+	velocity[numpy.isinf(velocity)] = 0
+	# Define contour levels
+	levels = lvls
+	lw = lwds
+	fig1 = plt.figure(figsize=(15,8),facecolor='white')
+	# Plot 1
+	ax1 = fig1.add_subplot(1,2,1)
+	ax1.set_facecolor('white')
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='x-large')
+	ax1.set_title(ID[0]+'%i'%(line[0]),weight='bold',size='x-large')
+	CS = plt.contour(contours, levels,
+					 linewidths=lw, colors='k', corner_mask=True,
+					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	im = plt.imshow(velocity[0,:,:], cmap=color, origin='lower',
+			   vmin = min, vmax = max,
+			   extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	ax = plt.gca()
+	plt.gca().get_xaxis().get_major_formatter().set_useOffset(False)
+	plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+	# Plot 2
+	ax2 = fig1.add_subplot(1,2,2)
+	ax2.set_facecolor('white')
+	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='x-large')
+	ax2.set_title(ID[1]+'%i'%(line[1]),weight='bold',size='x-large')
+	CS = plt.contour(contours, levels,
+					 linewidths=lw, colors='k', corner_mask=True,
+					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	im = plt.imshow(velocity[1,:,:], cmap=color, origin='lower',
+			   vmin = min, vmax = max,
+			   extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	ax = plt.gca()
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	divider = make_axes_locatable(ax)
+	cax = divider.append_axes("right", size="5%", pad=0.05)
+	cbar = fig1.colorbar(im, cax=cax)
+	cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
+
+	plt.savefig('m57_%s_%s.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
+	return
+
+
+
+def plot_velocity(velocity, contours, lvls, lwds, ra, dec, ID, line, min, max, color, cbar_label):
+	'''
+	Plot doublet velocity distribution(s), including contour regions.
+	Velocity - should only be 2D, of one line or avg. velocity of multiple lines
+	'''
+	velocity[numpy.isinf(velocity)] = 0
+
+	levels = lvls
+	lw = lwds
+	fig = plt.figure(figsize=(8,8),facecolor='white')
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)', weight='bold', size='large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)', weight='bold', size='large')
+	CS = plt.contour(contours, levels,
+					 linewidths=lw, colors='k', corner_mask=True,
+					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	im = plt.imshow(velocity, cmap=color, origin='lower',	#cmap='gnuplot'
+					vmin = min, vmax = max,
+					extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	#~ cbar = plt.colorbar()		# Each image should have its own colorbar
+	ax = plt.gca()
+	divider = make_axes_locatable(ax)
+	cax = divider.append_axes("right", size="5%", pad=0.05)
+	cbar = fig.colorbar(im, cax=cax)
+	cbar.ax.set_ylabel(cbar_label, weight='bold', size='large')
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+	#~ plt.show()
+
+	plt.savefig('m57_%s.eps'%(cbar_label[0:-7]))#,transparent=True)
+	return
+
+
+
+def plot_intensity_map(data, contours, lvls, lwds, ra, dec, ID, line, min, max, color, cbar_label):
+	'''
+	Plot doublet velocity distribution(s), including contour regions.
+	'''
+	levels = lvls
+	lw = lwds
+	fig = plt.figure(figsize=(8,8))
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)', weight='bold', size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)', weight='bold', size='x-large')
+	CS = plt.contour(contours, levels,
+					 linewidths=lw, colors='w', corner_mask=True,
+					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	im = plt.imshow(numpy.sum(data,axis=0), cmap=color, origin='lower',	#cmap='gnuplot'
+				#vmin = 0, vmax = 100,
+				extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	#~ cbar = plt.colorbar()		# Each image should have its own colorbar
+	ax = plt.gca()
+	divider = make_axes_locatable(ax)
+	cax = divider.append_axes("right", size="5%", pad=0.05)
+	cbar = fig.colorbar(im, cax=cax)
+	cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+	#~ plt.show()
+
+	plt.savefig('m57_%s.eps'%(cbar_label[0:-13]))#,transparent=True)
+	return
+
 
 
 def subtract_continuum(waves,flux):
@@ -338,6 +457,126 @@ def velocity_info_doublet(parms, cen, c):
 
 
 
+
+def velocity_distributions(velocity, regions, bin, legend):
+	'''
+	Use the results from the Gaussian fits over high S/N regions to find
+	the distribution of velocities over different regions in the image.
+	Find the distribution of velocities per region with their own histograms.
+
+	Region array is 2D, where: [ Region 1:[x1, y1, x2, y2],
+								 Region 2:[x1, y1, x2, y2],
+								....
+								 Region N:[x1, y1, x2, y2] ]
+	'''
+	# Take out nans and infs
+	velocity[numpy.isinf(velocity)] = -500
+
+	fig = plt.figure(figsize=(8,8))
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='large')
+
+	clr = ['blue','green','red','yellow','magenta','cyan']
+	regs = legend	#['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
+	alp = [0.3, 0.5, 0.7, 0.9]
+	# Loop through each box and make a histogram of velocity distributi
+	for reg in range(0,numpy.size(regions[:,0])):
+		y1 = regions[reg,0]
+		y2 = regions[reg,2]
+		x1 = regions[reg,1]
+		x2 = regions[reg,3]
+		vel = velocity[:,x1:x2,y1:y2].flatten()
+		plt.hist(vel, bin, align='mid', #density=True,
+				 color=clr[reg], alpha=alp[reg], label=regs[reg],
+				 edgecolor=clr[reg], linewidth=5)
+
+	plt.legend(loc='upper right')
+	ax = plt.gca()
+	ax.axes.get_yaxis().set_ticks([])
+	plt.show()
+	return
+
+
+
+def ks_test(velocity, region1, region2, bin, legend):
+	'''
+	Use defined regions to determine the likelihood that two clouds
+	share the same velocity distribution, because if they are from the same
+	distirbution, they likely
+	'''
+	# Take out nans and infs
+	velocity[numpy.isinf(velocity)] = -100000
+
+	# Define vel1, vel2 regions to make histogram
+	# Cloud 1:
+	y1 = region1[0]
+	y2 = region1[2]
+	x1 = region1[1]
+	x2 = region1[3]
+	#~ vel1 = []
+	#~ for i in range(x1,x2):
+		#~ for j in range(y1,y2):
+			#~ if velocity[:,i,j].any() == numpy.inf:
+				#~ print "Infinite value - continue"
+				#~ continue
+			#~ else:
+				#~ vel1.append(velocity[0,i,j],velocity[1,i,j])
+	vel1 = velocity[:,x1:x2,y1:y2].flatten()
+	indv = numpy.where(vel1 != -100000)[0]
+	vel1 = vel1[indv]
+	print numpy.size(vel1)
+	#~ vel1 = velocity[x1:x2,y1:y2].flatten()
+	#~ hist1, egdes1 = numpy.histogram(vel1,bins=50,range=(-100,100))#,density=True)
+	# Cloud 2
+	y1 = region2[0]
+	y2 = region2[2]
+	x1 = region2[1]
+	x2 = region2[3]
+	#~ vel2 = []
+	#~ for i in range(x1,x2):
+		#~ for j in range(y1,y2):
+			#~ if velocity[:,i,j].any() == numpy.inf:
+				#~ print "Infinite value - continue"
+				#~ continue
+			#~ else:
+				#~ vel2.append(velocity[:,i,j])
+	#~ vel2 = numpy.array(vel2)
+	vel2 = velocity[:,x1:x2,y1:y2].flatten()
+	indv = numpy.where(vel2 != -100000)[0]
+	vel2 = vel2[indv]
+	print numpy.size(vel2)
+	#~ vel2 = velocity[x1:x2,y1:y2].flatten()
+	#~ hist2, edges2 = numpy.histogram(vel2,bins=50,range=(-100,100))#,density=True)
+
+
+	# Find K-S Test between two samples
+	ks_stat, p_ks = ks_2samp(vel1, vel2)
+	print "K-S statistic = ", ks_stat,", p-value = ", p_ks," for ", legend[0]," and ", legend[1]
+	# Find Student's T-test statistic between the two samples
+	tt_stat, p_tt = ttest_ind(vel1, vel2, equal_var = False)
+	print "T-Test statistic = ", tt_stat,", p-value = ", p_tt," for ", legend[0]," and ", legend[1]
+	print
+	vel1[numpy.isinf(vel1)] = -100000
+	vel2[numpy.isinf(vel2)] = -100000
+
+	# Plot histograms with density
+	fig = plt.figure(figsize=(8,8))
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_xlabel('Velocity (km/s)')
+	plt.hist(vel1, bins=50, range=(-100,100), density=True, color='blue', edgecolor='blue',
+			 linewidth=5, alpha=0.7, label=legend[0])
+	plt.hist(vel2, bins=50, range=(-100,100), density=True, color='green', edgecolor='green',
+			 linewidth=5, alpha=0.7, label=legend[1])
+
+	plt.legend(loc='upper right')
+	#~ plt.show()
+
+
+	return
+
+
+
+
 def main_ring():
 	'''
 	Use to look at 04/12 data sets (co-added for max S/N)
@@ -445,6 +684,53 @@ def central_star():
 	#~ data_cut_contours = scipy.ndimage.zoom(numpy.sum(data_cut,axis=0), 3)
 	data_cut_contours = gaussian_filter(numpy.sum(data_cut,axis=0), 0.9)
 
+
+	# Define regions around the contours, and plot the rectangles to make sure they
+	# encapsulate the clouds of interest
+	levels = [25]
+	lw = [2.5]
+
+	clouds = [ [6,35,23,58],[11,23,18,35],[20,0,23,10],[0,59,5,69] ]
+	clouds = numpy.array(clouds)
+	cloud_labels = ['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
+
+	#~ fig2 = plt.figure(figsize=(8,8))
+	#~ ax2 = fig2.add_subplot(1,1,1)
+	#~ ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
+	#~ ax2.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='large')
+	#~ CS = plt.contour(data_cut_contours, levels,
+					 #~ linewidths=lw, colors='k', corner_mask=True)#,
+					 #~ #extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	#~ plt.imshow(numpy.sum(data_cut,axis=0), cmap='Blues', origin='lower')#,	#cmap='gnuplot'
+				#~ #vmin = 0, vmax = 100,
+				#extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	#~ for cl in range(0,numpy.size(clouds[:,0])):
+		#~ for p in [
+		#~ patches.Rectangle(
+			#~ (clouds[cl,0], clouds[cl,1]),   # (x,y)
+			#~ numpy.abs( clouds[cl,2] - clouds[cl,0] ),          # width
+			#~ numpy.abs( clouds[cl,3] - clouds[cl,1] ),          # height
+			#~ fill=False, edgecolor="red"      # remove background
+		#~ ),
+		#~ ]:
+		#patches.Rectangle(
+			#(all_ra[clouds[cl,0]]-2.5, all_dec[clouds[cl,1]]),   # (x,y)
+			#numpy.abs( all_ra[clouds[cl,2]] - all_ra[clouds[cl,0]] ),          # width
+			#numpy.abs( all_dec[clouds[cl,3]] - all_dec[clouds[cl,1]] ),          # height
+			#fill=False, edgecolor="red"      # remove background
+		#),
+		#]:
+			#~ ax2.add_patch(p)
+	#cbar = plt.colorbar()		# Each image should have its own colorbar
+	#cbar.ax.set_ylabel(r'[NI] Intensity (arb. units)',
+					    #weight='bold',size='large')
+	#~ ax = plt.gca()
+	#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	#~ plt.tight_layout()
+	#~ plt.show()
+
+
 	# 4. Fit Gaussian profile(s) to line(s) of interest
 	velocity_lines = numpy.zeros( [len(lines),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
 	vdisp_lines = numpy.zeros( [len(lines),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
@@ -476,106 +762,24 @@ def central_star():
 	#print all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]
 	#~ velocity_lines = gaussian_filter(velocity_lines, 0.1)
 	#~ vdisp_lines = gaussian_filter(vdisp_lines, 0.1)
-	print numpy.shape(velocity_lines)
-
-	fig1 = plt.figure()
-	ax1 = fig1.add_subplot(1,2,1)
-	#~ plt.plot(waves_lines,numpy.sum(data_lines,axis=(1,2)),drawstyle='steps-mid')
-	#~ plt.show()
-	#~ levels=[20,30,40,50]
-	#~ lw=[1, 2, 3, 4]
-	levels=[25]
-	lw=[2.5]
-	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
-	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='large')
-	CS = plt.contour(data_cut_contours, levels,
-					 linewidths=lw, colors='k', corner_mask=True,
-					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	plt.imshow(velocity_lines[0,:,:], cmap='bwr', origin='lower',
-			   vmin = -100, vmax = 100, #interpolation='bicubic',
-			   extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ cbar = plt.colorbar()
-	ax = plt.gca()
-	ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	ax.get_yaxis().get_major_formatter().set_useOffset(False)
-
-	#~ fig2 = plt.figure()
-	ax2 = fig1.add_subplot(1,2,2)
-	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
-	#~ ax2.set_ylabel(r'$\delta$ ($^{\circ}$)',weight='bold',size='large')
-	CS = plt.contour(data_cut_contours, levels,
-					 linewidths=lw, colors='k', corner_mask=True,
-					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	plt.imshow(velocity_lines[1,:,:], cmap='bwr', origin='lower',
-			   vmin = -100, vmax = 100, #interpolation='bicubic',
-			   extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ plt.imshow(numpy.sum(data_ni,axis=0), cmap='Blues', alpha=0.8, origin='lower',
-				#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	cbar = plt.colorbar()		# Each image should have its own colorbar
-	cbar.ax.set_ylabel(r'Velocity (km/s)',
-					   weight='bold',size='large')
-	ax = plt.gca()
-	ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	ax.get_yaxis().get_major_formatter().set_useOffset(False)
-	#plt.show()
-
-
-
-	fig1 = plt.figure()
-	ax1 = fig1.add_subplot(1,2,1)
-	#~ plt.plot(waves_lines,numpy.sum(data_lines,axis=(1,2)),drawstyle='steps-mid')
-	#~ plt.show()
-	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
-	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='large')
-	CS = plt.contour(data_cut_contours, levels,
-					 linewidths=lw, colors='k', corner_mask=True,
-					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	plt.imshow(vdisp_lines[0,:,:], cmap='BuGn', origin='lower',
-			   vmin = 0, vmax = 50,
-			   extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ cbar = plt.colorbar()
-	ax = plt.gca()
-	ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	ax.get_yaxis().get_major_formatter().set_useOffset(False)
-
-	#~ fig2 = plt.figure()
-	ax2 = fig1.add_subplot(1,2,2)
-	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
-	CS = plt.contour(data_cut_contours, levels,
-					 linewidths=lw, colors='k', corner_mask=True,
-					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	plt.imshow(vdisp_lines[1,:,:],cmap='BuGn', origin='lower',
-			   vmin = 0, vmax = 50,
-			   extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ plt.imshow(numpy.sum(data_ni,axis=0), cmap='Blues', alpha=0.8, origin='lower',
-				#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	cbar = plt.colorbar()		# Each image should have its own colorbar
-	cbar.ax.set_ylabel(r'Velocity Dispersion (km/s)',
-					    weight='bold',size='large')
-	ax = plt.gca()
-	ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	ax.get_yaxis().get_major_formatter().set_useOffset(False)
-	#plt.show()
-
-
-
-	fig2 = plt.figure()
-	ax2 = fig2.add_subplot(1,1,1)
-	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
-	ax2.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='large')
-	CS = plt.contour(data_cut_contours, levels,
-					 linewidths=lw, colors='k', corner_mask=True,
-					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	plt.imshow(numpy.sum(data_cut,axis=0), cmap='Blues', origin='lower',	#cmap='gnuplot'
-				#vmin = 0, vmax = 100,
-				extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	cbar = plt.colorbar()		# Each image should have its own colorbar
-	cbar.ax.set_ylabel(r'[NI] Intensity (arb. units)',
-					    weight='bold',size='large')
-	ax = plt.gca()
-	ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	bin = numpy.linspace(-100,100,30)
+	velocity_avg = numpy.average(velocity_lines,axis=0)
+	#~ velocity_distributions(velocity_lines, clouds, bin, cloud_labels)
+	#~ plot_velocity(velocity_avg, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, -100, 100, 'bwr', '[NI] Avg. Velocity (km/s)')
+	#~ ks_test(velocity_lines, clouds[0,:], clouds[3,:], bin, [cloud_labels[0],cloud_labels[3]])
+	#~ ks_test(velocity_lines, clouds[1,:], clouds[2,:], bin, [cloud_labels[1],cloud_labels[2]])
+	#~ ks_test(velocity_lines, clouds[0,:], clouds[1,:], bin, [cloud_labels[0],cloud_labels[1]])
+	#~ ks_test(velocity_lines, clouds[2,:], clouds[3,:], bin, [cloud_labels[2],cloud_labels[3]])
 	plt.show()
+
+	# Plot velocity maps:
+	plot_velocity_double(velocity_lines, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, -100, 100, 'bwr', 'Velocity (km/s)')
+	plot_velocity_double(vdisp_lines, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, 0, 20, 'BuGn', 'Dispersion (km/s)')
+
+	# Plot S/N cut data:
+	plot_intensity_map(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)')
+
+
 
 
 	return
