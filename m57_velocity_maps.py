@@ -103,6 +103,9 @@ def open_fits(file,*args):
 	sec = numpy.float(dec0[7:])
 	dec0_deg = ( (hr + (min/60.) + (sec/3600.)) )
 
+	#~ ra0_deg = hdulist[0].header['CRVAL1']
+	#~ dec0_deg = hdulist[0].header['CRVAL2']
+
 	delta_ra = hdulist[0].header['CD1_1']#*3600.		# change in RA per pix (IN DEGREES)
 	nra = numpy.size(data[0,0,:])
 	ra_lim = (nra/2.)*delta_ra					# Extrema coverage to one end of the image
@@ -152,8 +155,8 @@ def plot_velocity_double(velocity, contours, lvls, lwds, ra, dec, ID, line, min,
 	# Plot 1
 	ax1 = fig1.add_subplot(1,2,1)
 	ax1.set_facecolor('white')
-	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='x-large')
-	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='x-large')
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='x-large')
 	ax1.set_title(ID[0]+'%i'%(line[0]),weight='bold',size='x-large')
 	CS = plt.contour(contours, levels,
 					 linewidths=lw, colors='k', corner_mask=True,
@@ -167,7 +170,7 @@ def plot_velocity_double(velocity, contours, lvls, lwds, ra, dec, ID, line, min,
 	# Plot 2
 	ax2 = fig1.add_subplot(1,2,2)
 	ax2.set_facecolor('white')
-	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='x-large')
+	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
 	ax2.set_title(ID[1]+'%i'%(line[1]),weight='bold',size='x-large')
 	CS = plt.contour(contours, levels,
 					 linewidths=lw, colors='k', corner_mask=True,
@@ -199,8 +202,8 @@ def plot_velocity(velocity, contours, lvls, lwds, ra, dec, ID, line, min, max, c
 	lw = lwds
 	fig = plt.figure(figsize=(8,8),facecolor='white')
 	ax1 = fig.add_subplot(1,1,1)
-	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)', weight='bold', size='large')
-	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)', weight='bold', size='large')
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)', weight='bold', size='large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)', weight='bold', size='large')
 	CS = plt.contour(contours, levels,
 					 linewidths=lw, colors='k', corner_mask=True,
 					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
@@ -231,8 +234,8 @@ def plot_intensity_map(data, contours, lvls, lwds, ra, dec, ID, line, min, max, 
 	lw = lwds
 	fig = plt.figure(figsize=(8,8))
 	ax1 = fig.add_subplot(1,1,1)
-	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)', weight='bold', size='x-large')
-	ax1.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)', weight='bold', size='x-large')
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)', weight='bold', size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)', weight='bold', size='x-large')
 	CS = plt.contour(contours, levels,
 					 linewidths=lw, colors='w', corner_mask=True,
 					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
@@ -253,6 +256,46 @@ def plot_intensity_map(data, contours, lvls, lwds, ra, dec, ID, line, min, max, 
 	plt.savefig('m57_%s.eps'%(cbar_label[0:-13]))#,transparent=True)
 	return
 
+
+def plot_intensity_map_labeled(data, contours, lvls, lwds, ra, dec, ID, line, min, max, color, cbar_label, regions, region_labels):
+	'''
+	Plot doublet velocity distribution(s), including contour regions.
+	'''
+	levels = lvls
+	lw = lwds
+	fig = plt.figure(figsize=(8,8))
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)', weight='bold', size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)', weight='bold', size='x-large')
+	CS = plt.contour(contours, levels,
+					 linewidths=lw, colors='w', corner_mask=True,
+					 extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	im = plt.imshow(numpy.sum(data,axis=0), cmap=color, origin='lower',	#cmap='gnuplot'
+				#vmin = 0, vmax = 100,
+				extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	# Plot region labels to reference in paper
+	plt.text(ra[regions[0,2]]+7.0, dec[regions[0,3]], region_labels[0],
+					 weight='bold',size='x-large', color='white')	# Cloud 1
+	plt.text(ra[regions[1,0]]+1.5, dec[regions[1,3]], region_labels[1],
+					 weight='bold',size='x-large', color='white')	# Cloud 2
+	plt.text(ra[regions[2,0]]+1.0, dec[regions[2,3]]+0.5, region_labels[2],
+					 weight='bold',size='x-large', color='white')	# Cloud 3
+	plt.text(ra[regions[3,2]]+0.5, dec[regions[3,3]]-0.5, region_labels[3],
+					 weight='bold',size='x-large', color='white')	# Cloud 4
+
+	#~ cbar = plt.colorbar()		# Each image should have its own colorbar
+	ax = plt.gca()
+	divider = make_axes_locatable(ax)
+	cax = divider.append_axes("right", size="5%", pad=0.05)
+	cbar = fig.colorbar(im, cax=cax)
+	cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+
+	#~ plt.show()
+
+	plt.savefig('m57_%s_labeled.eps'%(cbar_label[0:-13]))#,transparent=True)
+	return
 
 
 def subtract_continuum(waves,flux):
@@ -458,12 +501,11 @@ def velocity_info_doublet(parms, cen, c):
 
 
 
-def velocity_distributions(velocity, regions, bin, legend):
+def velocity_distributions(velocity, regions, bin, legend, title):
 	'''
 	Use the results from the Gaussian fits over high S/N regions to find
 	the distribution of velocities over different regions in the image.
 	Find the distribution of velocities per region with their own histograms.
-
 	Region array is 2D, where: [ Region 1:[x1, y1, x2, y2],
 								 Region 2:[x1, y1, x2, y2],
 								....
@@ -473,12 +515,16 @@ def velocity_distributions(velocity, regions, bin, legend):
 	velocity[numpy.isinf(velocity)] = -500
 
 	fig = plt.figure(figsize=(8,8))
+	fig.set_rasterized(True)
 	ax1 = fig.add_subplot(1,1,1)
-	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='large')
+	ax1.set_rasterized(True)
+	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+	ax1.set_title(title, weight='bold', size='xx-large')
+	#~ ax1.set_yticklabels([])
 
 	clr = ['blue','green','red','yellow','magenta','cyan']
 	regs = legend	#['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
-	alp = [0.3, 0.5, 0.7, 0.9]
+	alp = [0.3, 0.4, 0.5, 0.6]
 	# Loop through each box and make a histogram of velocity distributi
 	for reg in range(0,numpy.size(regions[:,0])):
 		y1 = regions[reg,0]
@@ -486,13 +532,14 @@ def velocity_distributions(velocity, regions, bin, legend):
 		x1 = regions[reg,1]
 		x2 = regions[reg,3]
 		vel = velocity[:,x1:x2,y1:y2].flatten()
-		plt.hist(vel, bin, align='mid', #density=True,
+		plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
 				 color=clr[reg], alpha=alp[reg], label=regs[reg],
 				 edgecolor=clr[reg], linewidth=5)
 
-	plt.legend(loc='upper right')
+	plt.legend(loc='upper right', fontsize='large')
 	ax = plt.gca()
 	ax.axes.get_yaxis().set_ticks([])
+	#plt.savefig('m57_[NI]_Velocity_histogram.eps',rasterized=True)
 	plt.show()
 	return
 
@@ -585,11 +632,13 @@ def main_ring():
 	# Line list
 	HI = [4101.73, 4340.47, 4861.35]  	# delta, gamma, beta
 	HeI = [3888.65, 3972.02, 4026.19, 4471.48, 4713.15, 4921.93, 5015.68]
-	HeII = [4540, 4686, 5411]
-	NI = [5198.5, 5199]
-	OI = [5577,6300]
-	OII = [3726, 3729, 4267, 4661]
-	OIII = [4363.21, 4958.91, 5006.84, 5592.37]
+	HeII = [4540, 4685.804, 5411.50]
+	NI = [5197.902, 5200.257]
+	OII = [3726.032, 3728.815]
+	OIII = [4363.209, 4958.911, 5006.843]
+
+	hi_res_ID = ['HeII','HI','[OIII]','[OIII]']
+	hi_res = [4685.804, 4861.350, 4958.911, 5006.843]
 
 	date='170412'
 
@@ -650,15 +699,16 @@ def central_star():
 	vfile1 = path+dir+date+dir+redux+dir+varfile1
 
 	# Read in file, get important data from files
-	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1)		# data in units erg cm-2 s-1
+	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1,1)		# data in units erg cm-2 s-1
 	var1, varwv1 = open_fits_err(vfile1)
 
-	all_ra = (all_ra - ra)*3600.
-	all_dec = (all_dec - dec)*3600.
+	#~ all_ra = (all_ra - ra)*3600.
+	#~ all_dec = (all_dec - dec)*3600.
+	ra_cen = ra - (ra_ref-ra)
+	dec_cen = dec - (dec_ref-dec)+0.0005#*10
+	all_ra = (all_ra - ra_cen)*3600.
+	all_dec = (all_dec - dec_cen)*3600.
 
-	# RA/DEC of central star(s)
-	#~ ra_cs1 =
-	#~ dec_cs1 =
 
 	# Do things here
 	# 1. Define emission line(s) to define velocity maps
@@ -694,41 +744,46 @@ def central_star():
 	clouds = numpy.array(clouds)
 	cloud_labels = ['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
 
-	#~ fig2 = plt.figure(figsize=(8,8))
-	#~ ax2 = fig2.add_subplot(1,1,1)
-	#~ ax2.set_xlabel(r'$\Delta \alpha$ ($^{\circ}$)',weight='bold',size='large')
-	#~ ax2.set_ylabel(r'$\Delta \delta$ ($^{\circ}$)',weight='bold',size='large')
-	#~ CS = plt.contour(data_cut_contours, levels,
-					 #~ linewidths=lw, colors='k', corner_mask=True)#,
-					 #~ #extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ plt.imshow(numpy.sum(data_cut,axis=0), cmap='Blues', origin='lower')#,	#cmap='gnuplot'
-				#~ #vmin = 0, vmax = 100,
-				#extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ for cl in range(0,numpy.size(clouds[:,0])):
-		#~ for p in [
-		#~ patches.Rectangle(
-			#~ (clouds[cl,0], clouds[cl,1]),   # (x,y)
-			#~ numpy.abs( clouds[cl,2] - clouds[cl,0] ),          # width
-			#~ numpy.abs( clouds[cl,3] - clouds[cl,1] ),          # height
-			#~ fill=False, edgecolor="red"      # remove background
-		#~ ),
-		#~ ]:
-		#patches.Rectangle(
-			#(all_ra[clouds[cl,0]]-2.5, all_dec[clouds[cl,1]]),   # (x,y)
-			#numpy.abs( all_ra[clouds[cl,2]] - all_ra[clouds[cl,0]] ),          # width
-			#numpy.abs( all_dec[clouds[cl,3]] - all_dec[clouds[cl,1]] ),          # height
-			#fill=False, edgecolor="red"      # remove background
-		#),
-		#]:
-			#~ ax2.add_patch(p)
+	fig2 = plt.figure(figsize=(8,8))
+	ax2 = fig2.add_subplot(1,1,1)
+	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+	ax2.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+	CS = plt.contour(data_cut_contours, levels,
+					 linewidths=lw, colors='k', corner_mask=True,
+					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	plt.imshow(numpy.sum(data_cut,axis=0), cmap='Blues', origin='lower', #aspect='auto')#,	#cmap='gnuplot'
+				#vmin = 0, vmax = 100,
+				extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	# Overplot region locations with cloud labels
+	plt.text(all_ra[clouds[0,2]]+7, all_dec[clouds[0,3]], cloud_labels[0],weight='bold',size='x-large')	# Cloud 1
+	plt.text(all_ra[clouds[1,0]]+1.5, all_dec[clouds[1,3]], cloud_labels[1],weight='bold',size='x-large')	# Cloud 2
+	plt.text(all_ra[clouds[2,0]]+1.0, all_dec[clouds[2,3]]+0.5, cloud_labels[2],weight='bold',size='x-large')	# Cloud 3
+	plt.text(all_ra[clouds[3,2]]+0.5, all_dec[clouds[3,3]]-0.5, cloud_labels[3],weight='bold',size='x-large')	# Cloud 4
+
+	for cl in range(0,numpy.size(clouds[:,0])):
+		for p in [
+		patches.Rectangle(
+			(clouds[cl,0], clouds[cl,1]),   # (x,y)
+			numpy.abs( clouds[cl,2] - clouds[cl,0] ),          # width
+			numpy.abs( clouds[cl,3] - clouds[cl,1] ),          # height
+			fill=False, edgecolor="red"      # remove background
+		),
+		]:
+		#~ #patches.Rectangle(
+			#~ #(all_ra[clouds[cl,0]], all_dec[clouds[cl,1]]),   # (x,y)
+			#~ #numpy.abs( all_ra[clouds[cl,2]] - all_ra[clouds[cl,0]] ),          # width
+			#~ #numpy.abs( all_dec[clouds[cl,3]] - all_dec[clouds[cl,1]] ),          # height
+			#~ #fill=False, edgecolor="red"      # remove background
+		#~ #),
+		#~ #]:
+			ax2.add_patch(p)
 	#cbar = plt.colorbar()		# Each image should have its own colorbar
 	#cbar.ax.set_ylabel(r'[NI] Intensity (arb. units)',
 					    #weight='bold',size='large')
-	#~ ax = plt.gca()
-	#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
-	#~ plt.tight_layout()
-	#~ plt.show()
+	ax = plt.gca()
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	plt.show()
 
 
 	# 4. Fit Gaussian profile(s) to line(s) of interest
@@ -764,13 +819,13 @@ def central_star():
 	#~ vdisp_lines = gaussian_filter(vdisp_lines, 0.1)
 	bin = numpy.linspace(-100,100,30)
 	velocity_avg = numpy.average(velocity_lines,axis=0)
-	#~ velocity_distributions(velocity_lines, clouds, bin, cloud_labels)
+	#~ velocity_distributions(velocity_lines, clouds, bin, cloud_labels, '[NI] 5197+5200: Cloud Velocities')
 	#~ plot_velocity(velocity_avg, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, -100, 100, 'bwr', '[NI] Avg. Velocity (km/s)')
 	#~ ks_test(velocity_lines, clouds[0,:], clouds[3,:], bin, [cloud_labels[0],cloud_labels[3]])
 	#~ ks_test(velocity_lines, clouds[1,:], clouds[2,:], bin, [cloud_labels[1],cloud_labels[2]])
 	#~ ks_test(velocity_lines, clouds[0,:], clouds[1,:], bin, [cloud_labels[0],cloud_labels[1]])
 	#~ ks_test(velocity_lines, clouds[2,:], clouds[3,:], bin, [cloud_labels[2],cloud_labels[3]])
-	plt.show()
+	#~ plt.show()
 
 	# Plot velocity maps:
 	plot_velocity_double(velocity_lines, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, -100, 100, 'bwr', 'Velocity (km/s)')
@@ -778,11 +833,13 @@ def central_star():
 
 	# Plot S/N cut data:
 	plot_intensity_map(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)')
+	plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)', clouds, cloud_labels)
 
 
 
 
 	return
+
 
 
 
@@ -795,15 +852,18 @@ def central_star_offset_medium():
 	# Line list
 	HeII = [5411]
 	NII = [5755]
-	OI = [5577,6300]
+	OI = [5577.339, 6300.00]
 	OIII = [5592.37]
 	ClIII = [5517, 5537]
+
+	c = 3.0e5		# km/s
+
 
 	############### Central Region 1: 06/20 ##################
 	date='170415'
 
-	int = 'icubes'
-	var = 'vcubes'
+	int = 'icuber'
+	var = 'vcuber'
 
 	index1 = 188		# not ready
 
@@ -818,6 +878,93 @@ def central_star_offset_medium():
 	var1, varwv1 = open_fits_err(vfile1)
 
 	# Do things here
+	ra_cen = ra - (ra_ref-ra)/-1.5
+	dec_cen = dec - (dec_ref-dec)-0.00225
+	all_ra = (all_ra - ra_cen)*3600.
+	all_dec = (all_dec - dec_cen)*3600.
+	data1 = data1[:,1:-2,:]
+	var1 = var1[:,1:-2,:]
+	all_dec = all_dec[1:-2]
+
+
+	# Do things here
+	# 1. Define emission line(s) to define velocity maps
+	lines = OI[1]
+	ID = ['[OI]']#,'[OI]']
+	dlam = 5. 		# +/- extra wavelength coverage from min/max of lines
+	wv_range = numpy.where((waves1 > (numpy.min(lines)-dlam)) & (waves1 < (numpy.max(lines)+dlam)))[0]
+	#~ wv_range = numpy.where((waves1 > 5060) & (waves1 < 5300))[0]
+	waves_lines = waves1[wv_range]
+	data_lines = data1[wv_range,:,:]
+	var_lines = var1[wv_range,:,:]
+
+	flux_nocont = numpy.zeros( numpy.shape(data_lines) )
+
+	# 2. Loop through each image pixel to do continuu subtraction
+	for i in range(0,numpy.size(data_lines[0,:,0])):
+		for j in range(0,numpy.size(data_lines[0,0,:])):
+			flux_nocont[:,i,j] = subtract_continuum(waves_lines,data_lines[:,i,j])
+
+	# 3. Define S/N ration cut
+	sigma = 3.25			# 2.75 - good with var
+	#~ sigma = 2.5#2.2#33
+	data_cut = sn_cut(flux_nocont, var_lines, sigma)
+	print numpy.average(data_cut[data_cut>10])
+	data_cut[data_cut>100] = 0
+	#~ data_cut_contours = scipy.ndimage.zoom(numpy.sum(data_cut,axis=0), 3)
+	data_cut_contours = gaussian_filter(numpy.sum(data_cut,axis=0), 0.9)
+
+
+	# Define regions around the contours, and plot the rectangles to make sure they
+	# encapsulate the clouds of interest
+	levels = [25]
+	lw = [2.5]
+
+	clouds = [ [6,35,23,58],[11,23,18,35],[20,0,23,10],[0,59,5,69] ]
+	clouds = numpy.array(clouds)
+	cloud_labels = ['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
+
+	fig2 = plt.figure(figsize=(8,8))
+	ax2 = fig2.add_subplot(1,1,1)
+	ax2.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='large')
+	ax2.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='large')
+	CS = plt.contour(data_cut_contours, levels,
+					 linewidths=lw, colors='k', corner_mask=True,
+					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	plt.imshow(numpy.sum(data_cut,axis=0), cmap='Blues', origin='lower', #aspect='auto')#,	#cmap='gnuplot'
+				vmin = 0, vmax = 100,
+				extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	# Overplot region locations with cloud labels
+	#~ plt.text(all_ra[clouds[0,2]]+7, all_dec[clouds[0,3]], cloud_labels[0],weight='bold',size='x-large')	# Cloud 1
+	#~ plt.text(all_ra[clouds[1,0]]+1.5, all_dec[clouds[1,3]], cloud_labels[1],weight='bold',size='x-large')	# Cloud 2
+	#~ plt.text(all_ra[clouds[2,0]]+1.0, all_dec[clouds[2,3]]+0.5, cloud_labels[2],weight='bold',size='x-large')	# Cloud 3
+	#~ plt.text(all_ra[clouds[3,2]]+0.5, all_dec[clouds[3,3]]-0.5, cloud_labels[3],weight='bold',size='x-large')	# Cloud 4
+
+	#~ for cl in range(0,numpy.size(clouds[:,0])):
+		#~ for p in [
+		#~ patches.Rectangle(
+			#~ (clouds[cl,0], clouds[cl,1]),   # (x,y)
+			#~ numpy.abs( clouds[cl,2] - clouds[cl,0] ),          # width
+			#~ numpy.abs( clouds[cl,3] - clouds[cl,1] ),          # height
+			#~ fill=False, edgecolor="red"      # remove background
+		#~ ),
+		#~ ]:
+		#patches.Rectangle(
+			#(all_ra[clouds[cl,0]], all_dec[clouds[cl,1]]),   # (x,y)
+			#numpy.abs( all_ra[clouds[cl,2]] - all_ra[clouds[cl,0]] ),          # width
+			#numpy.abs( all_dec[clouds[cl,3]] - all_dec[clouds[cl,1]] ),          # height
+			#fill=False, edgecolor="red"      # remove background
+		#),
+		#]:
+			#~ ax2.add_patch(p)
+	#~ #cbar = plt.colorbar()		# Each image should have its own colorbar
+	#~ #cbar.ax.set_ylabel(r'[NI] Intensity (arb. units)',
+					    #~ #weight='bold',size='large')
+	ax = plt.gca()
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	#~ plt.tight_layout()
+	plt.show()
 
 
 
@@ -831,13 +978,13 @@ def central_star_offset_large():
 	'''
 	############### Main Ring (inner edge) ##################
 	# Line list
-	NI = [5198.5, 5199]
+	OI = [5577.339, 6300.00]
 
 	############### Central Region 1: 06/20 ##################
-	date='170415'
+	date='170619'
 
-	int = 'icubes'
-	var = 'vcubes'
+	int = 'icuber'
+	var = 'vcuber'
 
 	index1 = 188		# not ready
 
@@ -863,11 +1010,12 @@ def central_star_offset_large():
 
 if __name__ == "__main__":
 	global path, dir, redux
+	global ra_ref, dec_ref		# Central star coordinates - to subtract all all_ra, all_dec from
 
-	#path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
-	#dir = '\\'
-	path='/home/keri/KCWI/'
-	dir = '/'
+	path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
+	dir = '\\'
+	#path='/home/keri/KCWI/'
+	#dir = '/'
 	redux='redux'
 
 	# Line list
@@ -879,6 +1027,35 @@ if __name__ == "__main__":
 	OII = [3726, 3729, 4267, 4661]
 	OIII = [4363.21, 4958.91, 5006.84, 5592.37]
 
+	# RA/DEC of central star
+	ra_cen = 283.319
+	dec_cen = 33.01775
+
+	ra_ref = 360.*( (18. + (53/60.) + (35.079/3600.)) / 24.)			# 18:53:35.079
+	dec_ref = 33. + (01/60.) + (45.03/3600.)		#+33:01:45.03
+
+	'''
+	How the ra/dec are referenced in relation to ra_ref, dec_ref:
+
+	--- '170620' ---
+	ra_cen = ra - (ra_ref-ra)
+	dec_cen = dec - (dec_ref-dec)*10
+
+	--- '170415' ---
+	ra_cen = ra - (ra_ref-ra)/-3
+	dec_cen = dec - dec_ref-dec
+
+	--- '170619' ---
+	ra_cen = ra - (ra_ref-ra)*-560
+	dec_cen = dec - (dec_ref-dec)*40
+
+	--- '170412' ---
+	ra_cen = ra - (ra_ref-ra)/2
+	dec_cen = dec - (dec_ref-dec)/-1.5
+
+	'''
+
 
 	# Run each function per region probed
-	central_star() #path,dir,redux)
+	#~ central_star()		#path,dir,redux)
+	central_star_offset_medium()
