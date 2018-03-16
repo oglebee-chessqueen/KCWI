@@ -241,10 +241,10 @@ def plot_velocity(velocity, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, ID
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 
-	if len(args) == 1:
-		plt.savefig('m57_%s.eps'%(args[0]))#,transparent=True)
-	else:
-		plt.savefig('m57_%s_%s.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
+	#~ if len(args) == 1:
+		#~ plt.savefig('m57_%s.eps'%(args[0]))#,transparent=True)
+	#~ else:
+		#~ plt.savefig('m57_%s_%s.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
 	plt.show()
 	return
 
@@ -1698,19 +1698,23 @@ def central_star_offset_large():
 	'''
 	############### Main Ring (inner edge) ##################
 	# Line list
-	OI = [5577.339, 6300.00]
+	# Line list
+	linelist = [4471.480, 4541.6, 4634.14, 4640.64, 4649.135, 4661.633]	#4650.839
+	lineIDs = ['HeI', 'HeII', 'NIII', 'NIII', 'OII', 'OII']	#, 'OII'
+	c = 3.0e5
 
 	############### Central Region 1: 06/20 ##################
 	date='170619'
 
-	int = 'icuber'
-	var = 'vcuber'
+	int = 'icube'
+	var = 'vcube'
 
-	index1 = 188		# not ready
+	index1 = 260		# not ready
+	index2 = 261
 
-	intfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,int)
+	intfile1 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,int)
 	file1 = path+dir+date+dir+redux+dir+intfile1
-	varfile1 = 'kb'+date+'_00%03i_%s.fits' % (index1,var)
+	varfile1 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,var)
 	vfile1 = path+dir+date+dir+redux+dir+varfile1
 
 
@@ -1719,7 +1723,91 @@ def central_star_offset_large():
 	var1, varwv1 = open_fits_err(vfile1)
 
 	# Do things here
+	ra_cen = ra - (ra_ref-ra)+0.10325
+	dec_cen = dec - (dec_ref-dec)-0.00399
+	all_ra = (all_ra - ra_cen)*3600.
+	all_dec = (all_dec - dec_cen)*3600.
+	data1 = data1[:,2:-2,:]
+	var1 = var1[:,2:-2,:]
+	all_dec = all_dec[2:-2]
 
+
+
+	# 1. Define emission line(s) to define velocity maps
+	lines = [linelist[0]]	# HeI
+	ID = [lineIDs[0]]	#[hi_res_ID[2]+' Comp1', hi_res_ID[2]+' Comp2', hi_res_ID[3]+' Comp1', hi_res_ID[3]+' Comp2']
+	dlam = 5	#5. 		# +/- extra wavelength coverage from min/max of lines
+	wv_range = numpy.where((waves1 > (numpy.min(lines)-dlam)) & (waves1 < (numpy.max(lines)+dlam)))[0]
+	waves_lines = waves1[wv_range]
+	data_lines = data1[wv_range,:,:]
+	var_lines = var1[wv_range,:,:]
+
+	flux_nocont = numpy.zeros( numpy.shape(data_lines) )
+
+	# 2. Loop through each image pixel to do continuu subtraction
+	for i in range(0,numpy.size(data_lines[0,:,0])):
+		for j in range(0,numpy.size(data_lines[0,0,:])):
+			flux_nocont[:,i,j] = subtract_continuum(waves_lines,data_lines[:,i,j])
+
+	# 3. Define S/N ration cut
+	sigma =  10	#5	#5# 2.5			# HeII, OIII
+	data_cut = sn_cut(flux_nocont, var_lines, sigma)
+	#~ data_cut = sn_cut(data_lines, var_lines, sigma)
+	#~ data_cut_contours = gaussian_filter(numpy.sum(data_cut,axis=0), 0.3)
+	data_cut_contours = gaussian_filter(numpy.sum(data_cut,axis=0), 1.5)
+
+	levels = [100, 300,600,1000,1500]#,1750]	# He I
+	#~ levels = [75,100,110,120,135]	# Hbeta
+	#~ levels = [1200,1450,1700,2100,2400]	# [OIII]
+	lw = [1,1,2,3,4]
+	fig2 = plt.figure(figsize=(8,8))
+	ax1 = fig2.add_subplot(1,1,1)
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+	ax1.set_title(ID[0],weight='bold',size='x-large')
+	CS2 = plt.contour(data_cut_contours, levels,
+					 linewidths=lw, colors='white', #corner_mask=True,
+					 extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	plt.imshow(numpy.sum(data_cut,axis=0), cmap='nipy_spectral', origin='lower', #aspect='auto')#,	#cmap='gnuplot'
+				#~ vmin = 1000, vmax = 2000,
+				extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+	ax = plt.gca()
+	ax.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax.get_yaxis().get_major_formatter().set_useOffset(False)
+	plt.show()
+
+	# 4. Fit Gaussian profile(s) to line(s) of interest
+	velocity_lines = numpy.zeros( [len(lines),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
+	vdisp_lines = numpy.zeros( [len(lines),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
+	for i in range(0,numpy.size(data_lines[0,:,0])):
+		for j in range(0,numpy.size(data_lines[0,0,:])):
+			if numpy.sum(data_cut[:,i,j]) <= 0:
+				print "No lines detected at [%i,%i]" % (i,j)
+				for ww in range(0,len(lines)):
+					velocity_lines[ww,i,j] = -numpy.inf
+					vdisp_lines[ww,i,j] = -numpy.inf
+				continue
+			else:
+				# Define amplitude, st. dev, and parameter array for Gaussfit
+				dwave = 1
+				amp_lines = define_amplitudes(lines, waves_lines, data_cut[:,i,j], dwave)
+				linestdv = numpy.ones( numpy.size(waves_lines) )*0.5 	# Std. dev. array w/ guess:
+				gauss_parms = define_parms(lines, amp_lines, linestdv)
+
+				# fit gaussian profile(s) to the line(s)
+				# get the list of best-fit parameters back
+				popt = gaussfit(gauss_parms, waves_lines, data_cut[:,i,j])
+				popt = popt.reshape((len(popt)/3,3))
+
+				# Determine velocity (v_r) and dispersion (fwhm) of each line
+				vel, disp = velocity_info_single(popt, lines, c)
+				velocity_lines[:,i,j] = vel
+				vdisp_lines[:,i,j] = disp
+
+	bin = numpy.linspace(-100,100,20)
+	bin_disp =  numpy.linspace(0,80,20)
+	plot_velocity(velocity_lines[0,:,:], data_cut_contours, levels, lw, all_ra, all_dec, all_ra, all_dec, ID, lines, -40, 0, 'Blues_r', 'HeI Velocity (km/s)')
+	plot_velocity(vdisp_lines[0,:,:], data_cut_contours, levels, lw, all_ra, all_dec, all_ra, all_dec, ID, lines,  0, 150, 'BuGn', 'HeI Dispersion (km/s)')
 
 
 	return
@@ -1764,6 +1852,7 @@ if __name__ == "__main__":
 
 	# Run each function per region probed
 	''' THESE SHOULD BE DONE! '''
+	central_star_offset_large()
 	#~ NI_contours, NIra, NIdec = central_star()		#path,dir,redux)
 	#~ central_star_offset_medium(NI_contours, NIra, NIdec)
 	#~ main_ring()
