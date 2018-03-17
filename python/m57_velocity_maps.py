@@ -182,6 +182,8 @@ def plot_velocity_double(velocity, contours, lvls, lwds, ra, dec, ID, line, min,
 	im = plt.imshow(velocity[0,:,:], cmap=color, origin='lower',
 			   vmin = min, vmax = max,
 			   extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	plt.scatter(ra_stars,dec_stars, s=1000, facecolor='lime', marker='*', #alpha=0.5,
+							edgecolor='limegreen', linewidths=2.5)
 	ax = plt.gca()
 	plt.gca().get_xaxis().get_major_formatter().set_useOffset(False)
 	plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
@@ -197,6 +199,8 @@ def plot_velocity_double(velocity, contours, lvls, lwds, ra, dec, ID, line, min,
 	im = plt.imshow(velocity[1,:,:], cmap=color, origin='lower',
 			   vmin = min, vmax = max,
 			   extent=[ra[0],ra[-1],dec[0],dec[-1]])
+	plt.scatter(ra_stars,dec_stars, s=1000, facecolor='lime', marker='*', #alpha=0.5,
+							edgecolor='limegreen', linewidths=2.5)
 	ax = plt.gca()
 	ax.get_xaxis().get_major_formatter().set_useOffset(False)
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
@@ -205,7 +209,7 @@ def plot_velocity_double(velocity, contours, lvls, lwds, ra, dec, ID, line, min,
 	cbar = fig1.colorbar(im, cax=cax)
 	cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
 	#~ plt.tight_layout()
-	plt.savefig('m57_%s_%s.pdf'%(ID[0],cbar_label[0:-7]))#,transparent=True)
+	plt.savefig('m57_%s_%s_wstars.pdf'%(ID[0],cbar_label[0:-7]))#,transparent=True)
 	plt.show()
 	return
 
@@ -232,6 +236,8 @@ def plot_velocity(velocity, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, ID
 					vmin = min, vmax = max,
 					extent=[ra[0],ra[-1],dec[0],dec[-1]])
 	#~ cbar = plt.colorbar()		# Each image should have its own colorbar
+	plt.scatter(ra_stars,dec_stars, s=1000, facecolor='lime', marker='*', #alpha=0.5,
+							edgecolor='limegreen', linewidths=2.5)
 	ax = plt.gca()
 	divider = make_axes_locatable(ax)
 	cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -241,10 +247,10 @@ def plot_velocity(velocity, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, ID
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 
-	#~ if len(args) == 1:
-		#~ plt.savefig('m57_%s.eps'%(args[0]))#,transparent=True)
-	#~ else:
-		#~ plt.savefig('m57_%s_%s.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
+	if len(args) == 1:
+		plt.savefig('m57_%s_wstars.eps'%(args[0]))#,transparent=True)
+	else:
+		plt.savefig('m57_%s_%s_wstars.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
 	plt.show()
 	return
 
@@ -267,6 +273,8 @@ def plot_intensity_map(data, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, I
 				#vmin = 0, vmax = 100,
 				extent=[ra[0],ra[-1],dec[0],dec[-1]])
 	#~ cbar = plt.colorbar()		# Each image should have its own colorbar
+	plt.scatter(ra_stars,dec_stars, s=1000, facecolor='lime', marker='*', #alpha=0.5,
+							edgecolor='limegreen', linewidths=2.5)
 	ax = plt.gca()
 	divider = make_axes_locatable(ax)
 	cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -277,7 +285,7 @@ def plot_intensity_map(data, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, I
 
 	#~ plt.show()
 
-	plt.savefig('m57_%s.eps'%(cbar_label[0:-13]))#,transparent=True)
+	plt.savefig('m57_%s_wstars.eps'%(cbar_label[0:-13]))#,transparent=True)
 	return
 
 
@@ -315,19 +323,20 @@ def plot_intensity_map_labeled(data, contours, lvls, lwds, ra, dec, cont_ra, con
 	plt.text(ra[regions[2,0]]+2.2, dec[regions[2,3]]-2.0, region_labels[2],
 					 weight='bold',size='x-large', color='white')	# Inner Ring
 
-
+	plt.scatter(ra_stars,dec_stars, s=1000, facecolor='lime', marker='*', #alpha=0.5,
+							edgecolor='limegreen', linewidths=2.5)
 	#~ cbar = plt.colorbar()		# Each image should have its own colorbar
 	ax = plt.gca()
-	divider = make_axes_locatable(ax)
-	cax = divider.append_axes("right", size="5%", pad=0.05)
-	cbar = fig.colorbar(im, cax=cax)
-	cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
+	#~ divider = make_axes_locatable(ax)
+	#~ cax = divider.append_axes("right", size="5%", pad=0.05)
+	#~ cbar = fig.colorbar(im, cax=cax)
+	#~ cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
 	ax.get_xaxis().get_major_formatter().set_useOffset(False)
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 	#~ plt.show()
 
-	plt.savefig('m57_%s_labeled.eps'%(cbar_label[0:-13]))#,transparent=True)
+	plt.savefig('m57_%s_labeled_wstars_nocbar.pdf'%(cbar_label[0:-13]))#,transparent=True)
 	return
 
 
@@ -547,8 +556,8 @@ def velocity_info_doublet(parms, cen, c):
 			#~ vr[l] = -numpy.inf
 		if vdisp[l]>300:
 			vdisp[l] = -numpy.inf	#0
-	#~ if ((vr[1] - vr[0]) < -75) or (abs(vr[0]-vr[1]) > 75):
-		#~ vr = -numpy.inf	#0
+	if ((vr[1] - vr[0]) < -75) or (abs(vr[0]-vr[1]) > 75):
+		vr = -numpy.inf	#0
 	if abs(vdisp[0] - vdisp[1]) > 70:
 		vdisp[0] = vdisp[1] = numpy.min(vdisp)	#0
 	return vr, vdisp
@@ -1359,7 +1368,7 @@ def central_star():
 	#~ all_ra = (all_ra - ra)*3600.
 	#~ all_dec = (all_dec - dec)*3600.
 	ra_cen = ra - (ra_ref-ra)
-	dec_cen = dec - (dec_ref-dec)+0.0005#*10
+	dec_cen = dec - (dec_ref-dec)+0.00065#*10
 	all_ra = (all_ra - ra_cen)*3600.
 	all_dec = (all_dec - dec_cen)*3600.
 
@@ -1498,9 +1507,9 @@ def central_star():
 
 	# Plot S/N cut data:
 	#~ plot_intensity_map(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)')
-	#~ plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)', clouds, cloud_labels)
+	plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)', clouds, cloud_labels)
 
-	save_outputs(ID, velocity_lines, vdisp_lines, cloud_labels, clouds)
+	#~ save_outputs(ID, velocity_lines, vdisp_lines, cloud_labels, clouds)
 
 	print "[NI] analysis complete!"
 
@@ -1592,7 +1601,7 @@ def central_star_offset_medium(data_cut_contours, NIra, NIdec):
 	clouds = numpy.array(clouds)
 	cloud_labels = ['Cloud 1','Cloud 2','Inner Ring']
 
-	#~ plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, 0, 200, 'gnuplot', '[OI] Intensity (arb. units)', clouds, cloud_labels)
+	plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, 0, 200, 'gnuplot', '[OI] Intensity (arb. units)', clouds, cloud_labels)
 
 	#~ fig2 = plt.figure(figsize=(8,8))
 	#~ ax2 = fig2.add_subplot(1,1,1)
@@ -1664,8 +1673,8 @@ def central_star_offset_medium(data_cut_contours, NIra, NIdec):
 				velocity_lines[:,i,j] = vel
 				vdisp_lines[:,i,j] = disp
 
-		bin = numpy.linspace(-100,100,20)
-		bin_disp =  numpy.linspace(0,80,20)
+	bin = numpy.linspace(-100,100,20)
+	bin_disp =  numpy.linspace(0,80,20)
 	#~ velocity_avg = numpy.average(velocity_lines,axis=0)
 	#~ plot_velocity(velocity_lines[0,:,:], data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, -100, 100, 'bwr', '[OI]6300 Velocity (km/s)')
 	#~ plot_velocity(vdisp_lines[0,:,:], data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines,  0, 20, 'BuGn', '[OI]6300 Dispersion (km/s)')
@@ -1683,7 +1692,7 @@ def central_star_offset_medium(data_cut_contours, NIra, NIdec):
 	#~ ks_test(vdisp_lines, clouds[1,:], clouds[2,:], bin, [cloud_labels[1],cloud_labels[2]])
 	#~ plt.show()
 
-	save_outputs(ID, velocity_lines, vdisp_lines, cloud_labels, clouds)
+	#~ save_outputs(ID, velocity_lines, vdisp_lines, cloud_labels, clouds)
 	print "[OI] analysis complete!"
 
 
@@ -1820,6 +1829,7 @@ if __name__ == "__main__":
 	global path, dir, redux
 	global ra_ref, dec_ref		# Central star coordinates - to subtract all all_ra, all_dec from
 
+	global ra_stars, dec_stars
 	path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
 	dir = '\\'
 	#path='/home/keri/KCWI/'
@@ -1844,6 +1854,8 @@ if __name__ == "__main__":
 	# RA/DEC of central star
 	ra_cen = 283.319
 	dec_cen = 33.01775
+	ra_stars = [0,-7]		# RA of central stars, in deltaRA
+	dec_stars = [0, 4]		# DEC of central stars, in deltaDEC
 
 	ra_ref = 360.*( (18. + (53/60.) + (35.079/3600.)) / 24.)			# 18:53:35.079
 	dec_ref = 33. + (01/60.) + (45.03/3600.)		#+33:01:45.03
@@ -1852,10 +1864,10 @@ if __name__ == "__main__":
 
 	# Run each function per region probed
 	''' THESE SHOULD BE DONE! '''
-	central_star_offset_large()
 	#~ NI_contours, NIra, NIdec = central_star()		#path,dir,redux)
 	#~ central_star_offset_medium(NI_contours, NIra, NIdec)
 	#~ main_ring()
 	#~ main_ring_contour_plots()		# Makes 4-panel plot of Main Ring emission,
 															# including contours to highlight regions of
 															# interest ([OII] and Hbeta)
+	central_star_offset_large()
