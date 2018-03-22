@@ -247,10 +247,10 @@ def plot_velocity(velocity, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, ID
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
 
-	if len(args) == 1:
-		plt.savefig('m57_%s_wstars.eps'%(args[0]))#,transparent=True)
-	else:
-		plt.savefig('m57_%s_%s_wstars.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
+	#~ if len(args) == 1:
+		#~ plt.savefig('m57_%s_wstars.eps'%(args[0]))#,transparent=True)
+	#~ else:
+		#~ plt.savefig('m57_%s_%s_wstars.eps'%(ID[0],cbar_label[0:-7]))#,transparent=True)
 	plt.show()
 	return
 
@@ -283,9 +283,9 @@ def plot_intensity_map(data, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, I
 	ax.get_xaxis().get_major_formatter().set_useOffset(False)
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
-	#~ plt.show()
+	plt.show()
 
-	plt.savefig('m57_%s_wstars.eps'%(cbar_label[0:-13]))#,transparent=True)
+	#~ plt.savefig('m57_%s_wstars.eps'%(cbar_label[0:-13]))#,transparent=True)
 	return
 
 
@@ -334,9 +334,9 @@ def plot_intensity_map_labeled(data, contours, lvls, lwds, ra, dec, cont_ra, con
 	ax.get_xaxis().get_major_formatter().set_useOffset(False)
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
-	#~ plt.show()
+	plt.show()
 
-	plt.savefig('m57_%s_labeled_wstars_nocbar.pdf'%(cbar_label[0:-13]))#,transparent=True)
+	#~ plt.savefig('m57_%s_labeled_wstars_nocbar.pdf'%(cbar_label[0:-13]))#,transparent=True)
 	return
 
 
