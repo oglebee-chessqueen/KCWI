@@ -5,8 +5,12 @@
 from astropy.io import fits
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+import matplotlib.patches as mpatches
+import matplotlib.ticker as mtick
 import numpy
-
+plt.rcParams["font.family"] = "serif"
+plt.rcParams['axes.facecolor']='white'
+plt.rcParams['savefig.facecolor']='white'
 
 def open_fits(file,*args):
 	'''
@@ -254,36 +258,43 @@ def plot_image(data1,data2,data3,data4,dra1,ddec1,dra2,ddec2,dra3,ddec3,dra4,dde
 	'''
 	# Plot img1 and img2 over one another, but with img2 shifted to
 	# fit over img1
+	labels = ['[OI] 6300','[NI] 5200','HeI 4471','[OII] 3729']#'HI 4861']
+	colors = ['red','grey','blue','green']
 	levels=[100,1000]
 	levels2 = [1750,2500]
 	lw=[2.5,3.5]
-	fig = plt.figure()
-	ax = fig.add_subplot(111)
-	im1 = plt.imshow(numpy.sum(data2,axis=0), vmin=0, vmax=500, origin='lower',
+	fig = plt.figure(figsize=(10,10))
+	#~ fig.set_rasterized(True)
+	ax1 = fig.add_subplot(1,1,1)
+	#~ ax1.set_rasterized(True)
+	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)', weight='bold', size='x-large')
+	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)', weight='bold', size='x-large')
+	plt.imshow(numpy.sum(data2,axis=0), vmin=200, vmax=400, origin='lower',
 						interpolation="none", cmap='Reds',
-						extent=[dra2[0],dra2[-1],ddec2[0],ddec2[-1]])
+						extent=[dra2[0],dra2[-1],ddec2[0],ddec2[-1]],label=labels[0])
 
-	im2 = plt.imshow(numpy.sum(data1,axis=0), vmin=0, vmax=500, origin='lower',
-						interpolation="none", cmap='Greys', alpha=0.75,
-						extent=[dra1[0],dra1[-1],ddec1[0],ddec1[-1]])
+	plt.imshow(numpy.sum(data1,axis=0), vmin=0, vmax=200, origin='lower',
+						interpolation="none", cmap='Greys', alpha=0.8,
+						extent=[dra1[0],dra1[-1],ddec1[0],ddec1[-1]],label=labels[0])
 
-	im3 = plt.imshow(numpy.sum(data3,axis=0), vmin=0, vmax=3500, origin='lower',
-						interpolation="none", cmap='Blues', alpha=0.5,
-						extent=[dra3[0],dra3[-1],ddec3[0],ddec3[-1]])
+	plt.imshow(numpy.sum(data3,axis=0), vmin=500, vmax=1500, origin='lower',
+						interpolation="none", cmap='Blues', alpha=0.7,
+						extent=[dra3[0],dra3[-1],ddec3[0],ddec3[-1]],label=labels[0])
 
-	im4 = plt.imshow(numpy.sum(data4,axis=0), vmin=0, vmax=2500, origin='lower',
-						interpolation="none", cmap='Greens', alpha=0.95,
-						extent=[dra4[0],dra4[-1],ddec4[0],ddec4[-1]])
+	plt.imshow(numpy.sum(data4[:,32:-30,11:-12],axis=0), vmin=0, vmax=190, origin='lower',
+						interpolation="none", cmap='Greens', alpha=1,
+						extent=[dra4[11],dra4[-12],ddec4[32],ddec4[-30]],label=labels[0])
 
 	CS1 = plt.contour(numpy.sum(data1,axis=0), levels,
 									linewidths=lw, colors='k', corner_mask=True,
 									extent=[dra1[0],dra1[-1],ddec1[0],ddec1[-1]])
-
-	#~ CS3 = plt.contour(numpy.sum(data4,axis=0), levels2,
-									#~ linewidths=lw, colors='k', corner_mask=True,
-									#~ extent=[dra4[0],dra4[-1],ddec4[0],ddec4[-1]])
-	#~ cbar = plt.colorbar()
-	#~ cbar.ax.set_ylabel('Photon Counts',weight='bold',size='large')
+	patches = [ mpatches.Patch( color=colors[i], label=labels[i] ) for i in range(len(labels)) ]
+	# put those patched as legend-handles into the legend
+	plt.legend(handles=patches, bbox_to_anchor=(0.02, 0.98), loc=2, borderaxespad=0., fontsize='x-large')
+	ax1.get_xaxis().get_major_formatter().set_useOffset(False)
+	ax1.get_yaxis().get_major_formatter().set_useOffset(False)
+	#~ plt.tight_layout()
+	plt.savefig('m57_kcwi_images_combined.pdf',rasterized=True)
 	plt.show()
 
 	return
@@ -323,14 +334,79 @@ filename3='kb'+date3+'_00%03i_ocube.fits' % index3
 file3=path+dir+date3+dir+redux+dir+filename3
 
 date4='170412'	#
-index4=212
-filename4='kb'+date4+'_00%03i_icube.fits' % index4
+index4=212			# low-res
+index5 = 213
+filename4='kb'+date4+'_00%03i+00%03i_icubes_coadd.fits' % (index4,index5)
 file4=path+dir+date4+dir+redux+dir+filename4
+index6=210			# hi-res
+index7 = 211
+filename5='kb'+date4+'_00%03i+00%03i_icubes_coadd.fits' % (index6,index7)
+file5=path+dir+date4+dir+redux+dir+filename5
+
 
 data1, waves1, ra1, dec1, all_ra1, all_dec1 = open_fits(file1,1)	#N/S mixed up RA,DEC, so add 1 for args to know to switch them
 data2, waves2, ra2, dec2, all_ra2, all_dec2 = open_fits(file2)
 data3, waves3, ra3, dec3, all_ra3, all_dec3 = open_fits(file3,1)
 data4, waves4, ra4, dec4, all_ra4, all_dec4 = open_fits(file4)
+data5, waves5, ra5, dec5, all_ra5, all_dec5 = open_fits(file5)
+
+
+# plot collapsed 1d spectra
+spec1 = numpy.sum(data4,axis=(1,2))	# 170412
+wv1 = waves4
+spec2 = numpy.sum(data5,axis=(1,2))	# 170412
+wv2 = waves5
+spec3 = numpy.sum(data2,axis=(1,2))	# 170415
+wv3 = waves2
+spec4 = numpy.sum(data3,axis=(1,2))	# 170619
+wv4 = waves3
+spec5 = numpy.sum(data1,axis=(1,2))	# 170620
+wv5 = waves1
+
+fig = plt.figure(figsize=(8,8))
+ax1 = fig.add_subplot(4,1,1)
+#~ ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+ax1.set_ylabel(r'Flux (arb.)',weight='bold',size='x-large')
+ax1.set_title(date4,weight='bold',size='x-large')
+plt.semilogy(wv1,spec1,drawstyle='steps-mid',color='black',label='low-res')
+plt.semilogy(wv2,spec2,drawstyle='steps-mid',color='crimson',label='high-res')
+plt.legend()
+plt.ylim(10**2,1.5*10**6)
+plt.xlim(3500,5600)
+
+
+ax2 = fig.add_subplot(4,1,2)
+#~ ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+ax2.set_ylabel(r'Flux (arb.)',weight='bold',size='x-large')
+ax2.set_title(date2,weight='bold',size='x-large')
+plt.plot(wv3,spec3,drawstyle='steps-mid',color='black')
+plt.xlim(5450,6400)
+plt.ylim(10**2,2*10**5)
+f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+#~ ax2.get_yaxis().set_major_formatter(plt.LogFormatter(10,  labelOnlyBase=True))
+
+
+ax3 = fig.add_subplot(4,1,3)
+#~ ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+ax3.set_ylabel(r'Flux (arb.)',weight='bold',size='x-large')
+ax3.set_title(date3,weight='bold',size='x-large')
+plt.semilogy(wv4,spec4,drawstyle='steps-mid',color='black')
+plt.ylim(10**3,3*10**6)
+plt.xlim(4300,4800)
+
+ax4 = fig.add_subplot(4,1,4)
+ax4.set_xlabel(r'Wavelength ($\AA$)',weight='bold',size='x-large')
+ax4.set_ylabel(r'Flux (arb.)',weight='bold',size='x-large')
+ax4.set_title(date1,weight='bold',size='x-large')
+plt.semilogy(wv5,spec5,drawstyle='steps-mid',color='black')
+plt.ylim(4*10**3,2*10**4)
+plt.xlim(4950,5450)
+
+plt.tight_layout()
+plt.show()
+
 
 dra1 = ra_ref-ra1
 ddec1 = (dec_ref-dec1)*10
@@ -369,29 +445,29 @@ data_wv2, interval_wv2 = narrowband(line, data2, waves2, dwv2_blue, dwv2_red, "n
 data_wv2[data_wv2<0] = 0.
 vobs_wv2 = ((waves2[interval_wv2] - line) / line)*c
 
-dwv3_red = 15		# In case we only want to look at the blue/red region of a line
-dwv3_blue = 15
-line = 4640	#4471.5
+dwv3_red = 3	#15		# In case we only want to look at the blue/red region of a line
+dwv3_blue = 3 #15
+line = 4471.3	#4640	#4471.5
 data_wv3, interval_wv3 = narrowband(line, data3, waves3, dwv3_blue, dwv3_red, "n")
 data_wv3[data_wv3<0] = 0.
 vobs_wv3 = ((waves3[interval_wv3] - line) / line)*c
 
-dwv4_red = 5		# In case we only want to look at the blue/red region of a line
-dwv4_blue = 5
-line = 4861 #4500
+dwv4_red = 5	#2.5		# In case we only want to look at the blue/red region of a line
+dwv4_blue = 5	#2.5
+line = 3728 #4861 #4500
 data_wv4, interval_wv4 = narrowband(line, data4, waves4, dwv4_blue, dwv4_red, "n")
 data_wv4[data_wv4<0] = 0.
 vobs_wv4 = ((waves4[interval_wv4] - line) / line)*c
 
-ra_all1 = all_ra1-dra1
-ra_all2 = all_ra2-dra2
-ra_all3 = all_ra3-dra3
-ra_all4 = all_ra4-dra4
+ra_all1 = ((all_ra1-dra1) - ra_ref)*3600 - 1.129
+ra_all2 = ((all_ra2-dra2) - ra_ref)*3600 - 1.129
+ra_all3 = ((all_ra3-dra3) - ra_ref)*3600 - 1.129
+ra_all4 = ((all_ra4-dra4) - ra_ref)*3600 - 1.129
 
-dec_all1 = all_dec1-ddec1
-dec_all2 = all_dec2-ddec2
-dec_all3 = all_dec3-ddec3
-dec_all4 = all_dec4-ddec4
+dec_all1 = ((all_dec1-ddec1) - dec_ref)*3600 - 1.50766
+dec_all2 = ((all_dec2-ddec2) - dec_ref)*3600 - 1.50766
+dec_all3 = ((all_dec3-ddec3) - dec_ref)*3600 - 1.50766
+dec_all4 = ((all_dec4-ddec4) - dec_ref)*3600 - 1.50766
 
 # Set up dictionary with data, ra, dec as keys and arrays as values
 data_dict ={'data': [data_wv1, data_wv2, data_wv3, data_wv4],
