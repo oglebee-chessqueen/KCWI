@@ -228,7 +228,7 @@ def plot_velocity(velocity, contours, lvls, lwds, ra, dec, cont_ra, cont_dec, ID
 	ax1 = fig.add_subplot(1,1,1)
 	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)', weight='bold', size='x-large')
 	ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)', weight='bold', size='x-large')
-	ax1.set_title(ID[0], weight='bold', size='x-large')
+	#~ ax1.set_title(ID[0], weight='bold', size='x-large')
 	CS = plt.contour(contours, levels,
 					 linewidths=lw, colors='k', corner_mask=True,
 					 extent=[cont_ra[0],cont_ra[-1],cont_dec[0],cont_dec[-1]])
@@ -320,7 +320,7 @@ def plot_intensity_map_labeled(data, contours, lvls, lwds, ra, dec, cont_ra, con
 					 weight='bold',size='x-large', color='white')	# Cloud 1
 	plt.text(ra[regions[1,0]], dec[regions[1,3]]+0.5, region_labels[1],
 					 weight='bold',size='x-large', color='white')	# Cloud 2
-	plt.text(ra[regions[2,0]]+2.2, dec[regions[2,3]]-2.0, region_labels[2],
+	plt.text(ra[regions[2,0]]+4.7, dec[regions[2,3]]-2.0, region_labels[2],
 					 weight='bold',size='x-large', color='white')	# Inner Ring
 
 	plt.scatter(ra_stars,dec_stars, s=1000, facecolor='lime', marker='*', #alpha=0.5,
@@ -331,6 +331,8 @@ def plot_intensity_map_labeled(data, contours, lvls, lwds, ra, dec, cont_ra, con
 	#~ cax = divider.append_axes("right", size="5%", pad=0.05)
 	#~ cbar = fig.colorbar(im, cax=cax)
 	#~ cbar.ax.set_ylabel(cbar_label, weight='bold', size='x-large')
+	plt.xlim(ra[0],ra[-1])
+	plt.ylim(dec[0],dec[-1])
 	ax.get_xaxis().get_major_formatter().set_useOffset(False)
 	ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
@@ -595,7 +597,7 @@ def velocity_distributions(velocity, regions, bin, legend, title):
 								 Region N:[x1, y1, x2, y2] ]
 	'''
 	# Take out nans and infs
-	velocity[numpy.isinf(velocity)] = -500
+	velocity[numpy.isinf(velocity)] = 5000000
 
 	fig = plt.figure(figsize=(8,8))
 	fig.set_rasterized(True)
@@ -606,16 +608,17 @@ def velocity_distributions(velocity, regions, bin, legend, title):
 	#~ ax1.set_yticklabels([])
 
 	#~ clr = ['blue','green','red','yellow']		# [NI]
-	#~ clr = ['blue','green','cyan']		# [OI]
-	clr = ['teal']#'purple']		# [OII]
+	clr = ['blue','green','cyan']		# [OI]
+	#~ clr = ['teal']#'purple']		# [OII]
 	#~ clr = ['magenta']		# HeII
 	#~ clr = ['deepskyblue','magenta']		# Hbeta
 	#~ clr = ['limegreen','orange']		# [OIII]
 	regs = legend	#['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
 	alp = [0.3, 0.4, 0.5, 0.6]
+	#~ print numpy.size(regions)
 	# Loop through each box and make a histogram of velocity distributi
 	for reg in range(0,numpy.size(regs)):	#regions[:,0])):
-		if numpy.size(reg) == 1:
+		if numpy.size(regions) == 4:
 			y1 = regions[0]
 			y2 = regions[2]
 			x1 = regions[1]
@@ -626,10 +629,12 @@ def velocity_distributions(velocity, regions, bin, legend, title):
 			x1 = regions[reg,1]
 			x2 = regions[reg,3]
 		vel = velocity[:,x1:x2,y1:y2].flatten()
-		plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
+		plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', density=True,
 				 color=clr[reg], alpha=alp[reg], label=regs[reg],
 				 edgecolor=clr[reg], linewidth=5)
 
+	if numpy.any(vel < 0):
+		plt.axvline(x=v_m57, color='black', linestyle='dashed', lw=3, label='M57')
 	plt.legend(loc='upper right', fontsize='large')
 	ax = plt.gca()
 	ax.axes.get_yaxis().set_ticks([])
@@ -1077,6 +1082,7 @@ def main_ring():
 	# Read in file, get important data from files
 	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1,1)		# data in units erg cm-2 s-1
 	data2, waves2, ra2, dec2, all_ra2, all_dec2 = open_fits(file2,1)		# data in units erg cm-2 s-1
+	waves2 = waves2 - 0.25		# offset in lines from BH2
 	var1, varwv1 = open_fits_err(vfile1)
 	var2, varwv2 = open_fits_err(vfile2)
 
@@ -1147,6 +1153,7 @@ def main_ring():
 	# Read in file, get important data from files
 	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1,1)		# data in units erg cm-2 s-1
 	data2, waves2, ra2, dec2, all_ra2, all_dec2 = open_fits(file2,1)		# data in units erg cm-2 s-1
+	waves2 = waves2 - 0.18		# offset in lines from BH2
 	var1, varwv1 = open_fits_err(vfile1)
 	var2, varwv2 = open_fits_err(vfile2)
 
@@ -1165,16 +1172,21 @@ def main_ring():
 
 	lo_res = [5197.902, 5200.257]
 	lo_res_ID= ['[NI]','[NI]']
-	lo_res = [4068.600]#, 4076.349]
-	lo_res_ID= ['[SII]']#,'[SII]']
-	lo_res = [5517.709, 5537.873]
-	lo_res_ID= ['[ClIII]','[ClIII]']
-	lo_res = [3868.760]
-	lo_res_ID= ['[NeIII]']
-	lo_res = [4340.472]
-	lo_res_ID= ['Hgam']
-	#~ lo_res = [4861.350	]
+	#~ lo_res = [4068.600]#, 4076.349]
+	#~ lo_res_ID= ['[SII]']#,'[SII]']
+	#~ lo_res = [5517.709, 5537.873]
+	#~ lo_res_ID= ['[ClIII]','[ClIII]']
+	#~ lo_res = [3868.760]
+	#~ lo_res_ID= ['[NeIII]']
+	#~ lo_res = [4340.472]
+	#~ lo_res_ID= ['Hgam']
+	#~ lo_res = [4861.350]
 	#~ lo_res_ID= ['Hbeta']
+	#~ lo_res = [4101.734]
+	#~ lo_res_ID= ['Hdelta']
+	#~ lo_res_ID = ['[OII]','[OII]']
+	#~ lo_res = [3726.032, 3728.815]
+
 
 	lines = lo_res	#hi_res[0]
 	dlam = 5. 		# +/- extra wavelength coverage from min/max of lines
@@ -1195,12 +1207,9 @@ def main_ring():
 	data_cut = sn_cut(flux_nocont, var_lines, sigma)
 
 
-	#~ #levels = [30,80,93,110,130]
-	#~ #lw = [1,2,3,4,5]
-	#~ #fig2 = plt.figure(figsize=(8,8))
+
 	ax1 = fig2.add_subplot(1,2,2)
 	ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
-	#~ #ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='x-large')
 	ax1.set_title(lo_res_ID[0],weight='bold',size='x-large')
 	CS2 = plt.contour(data_cut_contours, levels,
 					 linewidths=lw, colors='white', #corner_mask=True,
@@ -1243,6 +1252,7 @@ def main_ring():
 				vdisp_lines[:,i,j] = disp
 
 	bin = numpy.linspace(-50,50,40)
+	bin = numpy.linspace(-100,100,40)
 	bin_disp =  numpy.linspace(0,200,80)
 	#~ vdisp_lines[vdisp_lines>100] = vdisp_lines[vdisp_lines>100] - 100
 	#~ vdisp_lines[vdisp_lines>60] = numpy.median(vdisp_lines)
@@ -1560,7 +1570,7 @@ def central_star():
 	#~ #velocity_lines = gaussian_filter(velocity_lines, 0.1)
 	#~ #vdisp_lines = gaussian_filter(vdisp_lines, 0.1)
 	bin = numpy.linspace(-100,100,30)
-	bin_disp = numpy.linspace(0,80,10)
+	bin_disp = numpy.linspace(0,80,20)
 	#~ velocity_avg = numpy.average(velocity_lines,axis=0)
 
 	# Plots and statistics and stuff
@@ -1586,7 +1596,7 @@ def central_star():
 
 	# Plot S/N cut data:
 	#~ plot_intensity_map(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)')
-	plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)', clouds, cloud_labels)
+	#~ plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, all_ra, all_dec, ID, lines, 0, 100, 'gnuplot', '[NI] Intensity (arb. units)', clouds, cloud_labels)
 
 	#~ save_outputs(ID, velocity_lines, vdisp_lines, cloud_labels, clouds)
 
@@ -1662,7 +1672,7 @@ def central_star_offset_medium(data_cut_contours, NIra, NIdec):
 			flux_nocont[:,i,j] = subtract_continuum(waves_lines,data_lines[:,i,j])
 
 	# 3. Define S/N ration cut
-	sigma = 3.1		# 2.75 - good with var
+	sigma = 3.5		# 2.75 - good with var
 	#~ sigma = 2.5#2.2#33
 	data_cut = sn_cut(flux_nocont, var_lines, sigma)
 	print numpy.average(data_cut[data_cut>10])
@@ -1676,11 +1686,11 @@ def central_star_offset_medium(data_cut_contours, NIra, NIdec):
 	levels = [25]
 	lw = [2.5]
 
-	clouds = [ [0,10,15,38],[1,0,8,10],[20,45,23,67] ]
+	clouds = [ [0,10,15,38],[1,0,8,10],[20,45,23,66] ]
 	clouds = numpy.array(clouds)
 	cloud_labels = ['Cloud 1','Cloud 2','Inner Ring']
 
-	plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, 0, 200, 'gnuplot', '[OI] Intensity (arb. units)', clouds, cloud_labels)
+	#~ plot_intensity_map_labeled(data_cut, data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, 0, 100, 'gnuplot', '[OI] Intensity (arb. units)', clouds, cloud_labels)
 
 	#~ fig2 = plt.figure(figsize=(8,8))
 	#~ ax2 = fig2.add_subplot(1,1,1)
@@ -1752,11 +1762,11 @@ def central_star_offset_medium(data_cut_contours, NIra, NIdec):
 				velocity_lines[:,i,j] = vel
 				vdisp_lines[:,i,j] = disp
 
-	bin = numpy.linspace(-100,100,20)
-	bin_disp =  numpy.linspace(0,80,20)
+	bin = numpy.linspace(-100,100,25)
+	bin_disp = numpy.linspace(0,80,20)
 	#~ velocity_avg = numpy.average(velocity_lines,axis=0)
-	#~ plot_velocity(velocity_lines[0,:,:], data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, -100, 100, 'bwr', '[OI]6300 Velocity (km/s)')
-	#~ plot_velocity(vdisp_lines[0,:,:], data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines,  0, 20, 'BuGn', '[OI]6300 Dispersion (km/s)')
+	plot_velocity(velocity_lines[0,:,:], data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines, -100, 100, 'bwr', '[OI]6300 Velocity (km/s)')
+	plot_velocity(vdisp_lines[0,:,:], data_cut_contours, [25], [2.5], all_ra, all_dec, NIra, NIdec, ID, lines,  0, 20, 'BuGn', '[OI]6300 Dispersion (km/s)')
 
 	# Plots and statistics and stuff
 	#~ velocity_distributions(velocity_lines, clouds, bin, cloud_labels, '[OI] 6300: Cloud Velocities')
@@ -1937,7 +1947,7 @@ if __name__ == "__main__":
 	global path, dir, redux
 	global ra_ref, dec_ref		# Central star coordinates - to subtract all all_ra, all_dec from
 
-	global ra_stars, dec_stars
+	global ra_stars, dec_stars, v_m57
 	path='C:\\Users\\Keri Hoadley\\Documents\\KCWI'
 	dir = '\\'
 	#path='/home/keri/KCWI/'
@@ -1960,6 +1970,7 @@ if __name__ == "__main__":
 							'HeII_kcwi_velocities_regions.npz']
 
 	# RA/DEC of central star
+	v_m57 = -19.0		# km/s, moving towards observer
 	ra_cen = 283.319
 	dec_cen = 33.01775
 	ra_stars = [0,-7]		# RA of central stars, in deltaRA
@@ -1974,8 +1985,8 @@ if __name__ == "__main__":
 	''' THESE SHOULD BE DONE! '''
 	#~ NI_contours, NIra, NIdec = central_star()		#path,dir,redux)
 	#~ central_star_offset_medium(NI_contours, NIra, NIdec)
-	#~ main_ring()
+	main_ring()
 	#~ main_ring_contour_plots()		# Makes 4-panel plot of Main Ring emission,
 															# including contours to highlight regions of
 															# interest ([OII] and Hbeta)
-	central_star_offset_large()
+	#~ central_star_offset_large()
