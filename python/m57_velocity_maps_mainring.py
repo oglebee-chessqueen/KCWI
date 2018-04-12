@@ -629,17 +629,20 @@ def velocity_distributions(velocity, regions, bin, legend, title, alp):
 			y2 = regions[reg,2]
 			x1 = regions[reg,1]
 			x2 = regions[reg,3]
-		vel_hist = numpy.zeros( [(numpy.size(velocity[0,y1:y2,0])*numpy.size(velocity[0,0,x1:x2])),numpy.size(velocity[:,0,0])] )
-		print numpy.shape(vel_hist)
-		print x1, x2, y1, y2, numpy.shape(velocity), numpy.shape(velocity[0,y1:y2,x1:x2]), numpy.shape(velocity[0,y1:y2,x1:x2].flatten())
-		for i in range(0,numpy.size(velocity[:,0,0])):
-			vel_hist[:,i] = velocity[i,y1:y2,x1:x2].flatten()
-		#~ vel = velocity[x1:x2,y1:y2].flatten()
-		vel = velocity[:,y1:y2,x1:x2].flatten()
-		#~ plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
-		plt.hist(vel_hist, bin, align='mid', histtype='step', stacked='True', fill='True', density=True,
-				 #~ color=clr[reg], alpha=alp[reg], edgecolor=clr[reg],
-				 alpha=alp, label=legend, linewidth=5)
+		# For when multiple lines are read into this function:
+		#~ print velocity.ndim
+		if velocity.ndim > 2:
+			vel_hist = numpy.zeros( [(numpy.size(velocity[0,y1:y2,0])*numpy.size(velocity[0,0,x1:x2])),numpy.size(velocity[:,0,0])] )
+			for i in range(0,numpy.size(velocity[:,0,0])):
+				vel_hist[:,i] = velocity[i,y1:y2,x1:x2].flatten()
+			plt.hist(vel_hist, bin, align='mid', histtype='step', stacked='True', fill='True', density=True,
+							 alpha=alp, label=legend, linewidth=5)
+			vel = velocity[:,y1:y2,x1:x2].flatten()
+		# Just one emission line at once
+		else:
+			vel = velocity[y1:y2,x1:x2].flatten()
+			plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
+							 alpha=alp, label=legend, linewidth=5)
 
 	if numpy.any(vel < 0):
 		plt.axvline(x=v_m57, color='black', linestyle='dashed', lw=3)#, label='M57')
@@ -907,7 +910,7 @@ def low_res():
 	# Read in file, get important data from files
 	#~ data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1,1)		# data in units erg cm-2 s-1
 	data2, waves2, ra, dec, all_ra, all_dec = open_fits(file2,1)		# data in units erg cm-2 s-1
-	waves2 = waves2 - 0.18		# offset in lines from BH2
+	waves2 = waves2 - 0.24 #0.18		# offset in lines from BH2
 	#~ var1, varwv1 = open_fits_err(vfile1)
 	var2, varwv2 = open_fits_err(vfile2)
 
@@ -930,14 +933,14 @@ def low_res():
 	#~ lo_res_ID= ['[OII]','[OII]','[NeIII]','[SII]','Hdelta','Hgamma',
 							#~ 'HeI','HeII','Hbeta','[OIII]','[OIII]',
 							#~ '[NI]','[NI]','[ClIII]','[ClIII]']
-	lo_res = [[3726.032, 3728.815], 3868.760, 4068.600, 4101.734, 4340.472,
+	lo_res = [[3726.032, 3728.815], 3868.760, [4068.600, 4076.349], 4101.734, 4340.472,
 						4471.48, 4685.804, 4861.350, [4958.911, 5006.843],	#4713.15,
-						[5197.902, 5200.257], [5517.709, 5537.873]]
+						[5197.902, 5200.257], [5517.709, 5537.873]]#, 5577.339, [4562.6, 4571.1]]
 	lo_res_ID= ['[OII]','[NeIII]','[SII]','Hdelta','Hgamma',
 							'HeI','HeII','Hbeta','[OIII]',
-							'[NI]','[ClIII]']
+							'[NI]','[ClIII]']#,'[OI]','[MgI']
 	# Split into recombination and collision species
-	cel = [0,1,2,8,9,10]	#  collisonally-excited
+	cel = [0,1,2,8,9,10]#,11,12]	#  collisonally-excited
 	rel = [3,4,5,6,7]	# recombination
 	# TEST
 	#~ lo_res = [3868.760, 4068.600, 4101.734, 4340.472,
@@ -945,8 +948,10 @@ def low_res():
 	#~ lo_res_ID= ['[NeIII]','[SII]','Hdelta','Hgamma',
 							#~ 'HeI','HeII','Hbeta','[OIII]','[ClIII]']
 	# TEST
-	#~ lo_res = [3868.760, 4068.600, 4101.734]
-	#~ lo_res_ID= ['[NeIII]','[SII]','Hdelta']
+	#~ lo_res = [[3726.032, 3728.815], 3868.760, 4068.600, 4101.734, 4861.350]
+	#~ lo_res_ID= ['[OII]','[NeIII]','[SII]','Hdelta','Hbeta']
+	#~ cel = [0,1,2]
+	#~ rel = [3,4]
 
 	#~ lo_res = [5197.902, 5200.257]
 	#~ lo_res_ID= ['[NI]','[NI]']
@@ -1066,44 +1071,102 @@ def low_res():
 
 	# Plots and statistics and stuff
 	# 1. radial velocity (projected motion)
+	# All in one plot (CEL vs RL)
+	#~ fig = plt.figure(figsize=(8,8))
+	#~ # CEL
+	#~ ax1 = fig.add_subplot(1,2,1)
+	#~ ax1.set_title('Collisionally-Excited Lines', weight='bold', size='x-large')
+	#~ ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+	#~ alp = 1.0
+	#~ img = 1
+	#~ vel_cel = numpy.zeros( [len(cel),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
+	#~ ID_cel = []
+	#~ for c in range(0,len(cel)):
+		#~ vel_cel[c,:,:] = velocity_lines[cel[c],:,:]
+		#~ ID_cel.append( lo_res_ID[cel[c]] )
+	#~ velocity_distributions(vel_cel, clouds, bin, ID_cel, 'Collisionally-Excited Lines', alp)
+	#~ plt.xlim(-75,29)
+	#~ plt.legend(loc='upper right', fontsize='large')
+	#~ ax = plt.gca()
+	#~ ax.axes.get_yaxis().set_ticks([])
+
+	#~ # REL
+	#~ ax2 = fig.add_subplot(1,2,2)
+	#~ ax2.set_title('Recombination Lines', weight='bold', size='x-large')
+	#~ ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+	#~ vel_rel = numpy.zeros( [len(rel),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
+	#~ ID_rel = []
+	#~ for r in range(0,len(rel)):
+		#~ vel_rel[r,:,:] = velocity_lines[rel[r],:,:]
+		#~ ID_rel.append( lo_res_ID[rel[r]] )
+	#~ velocity_distributions(vel_rel, clouds, bin, ID_rel, 'Recombination Lines', alp)
+	#~ plt.xlim(-75,29)
+	#~ plt.legend(loc='upper right', fontsize='large')
+	#~ ax = plt.gca()
+	#~ ax.axes.get_yaxis().set_ticks([])
+
+	#~ plt.show()
+
+
+	# 2. radial velocity (projected motion)
+	# Split up histrograms into individual histograms, stacked
 	fig = plt.figure(figsize=(8,8))
-	# CEL
-	ax1 = fig.add_subplot(1,2,1)
-	#~ ax1.set_rasterized(True)
-	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
-	alp = 1.0
+	alp = 0.5
 	img = 1
-	#~ for line in range(0,len(lines)):
-		#~ velocity_distributions(velocity_lines[line,:,:], clouds, bin, cloud_labels, '%s: Velocities'%(lo_res_ID[line]))
-		#~ velocity_distributions(velocity_lines, clouds, bin, lo_res_ID, '%s: Velocities'%(lo_res_ID), alp)
-	vel_cel = numpy.zeros( [len(cel),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
-	ID_cel = []
 	for c in range(0,len(cel)):
-		vel_cel[c,:,:] = velocity_lines[cel[c],:,:]
-		ID_cel.append( lo_res_ID[cel[c]] )
-	velocity_distributions(vel_cel, clouds, bin, ID_cel, 'Collisionally-Excited Lines', alp)
-		#~ alp = alp - 0.1
-	plt.xlim(-75,35)
-	plt.legend(loc='upper right', fontsize='large')
-	ax = plt.gca()
-	ax.axes.get_yaxis().set_ticks([])
+		# CEL
+		if c == 0:
+			ax1 = fig.add_subplot(len(cel),1,1)
+			ax1.set_title('Collisionally-Excited Lines', weight='bold', size='x-large')
+			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], 'Collisionally-Excited Lines', alp)
+			plt.legend(loc='upper right', fontsize='large')
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		elif c == len(cel):
+			ax2 = fig.add_subplot(len(cel),1,img+c, sharex=ax1)
+			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], 'Collisionally-Excited Lines', alp)
+			plt.legend(loc='upper right', fontsize='large')
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		else:
+			ax2 = fig.add_subplot(len(cel),1,img+c, sharex=ax1)
+			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], 'Collisionally-Excited Lines', alp)
+			plt.legend(loc='upper right', fontsize='large')
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+
 	#~ plt.show()
 	# REL
-	ax2 = fig.add_subplot(1,2,2)
-	#~ ax2.set_rasterized(True)
-	ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
-	vel_rel = numpy.zeros( [len(rel),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
-	ID_rel = []
+	fig = plt.figure(figsize=(8,8))
+	alp = 0.5
+	img = 1
 	for r in range(0,len(rel)):
-		vel_rel[r,:,:] = velocity_lines[rel[r],:,:]
-		ID_rel.append( lo_res_ID[rel[r]] )
-	velocity_distributions(vel_rel, clouds, bin, ID_rel, 'Recombination Lines', alp)
-	plt.xlim(-75,35)
-	plt.legend(loc='upper right', fontsize='large')
-	ax = plt.gca()
-	ax.axes.get_yaxis().set_ticks([])
+		# RL
+		if r == 0:
+			ax1 = fig.add_subplot(len(rel),1,1)
+			ax1.set_title('Resonance Lines', weight='bold', size='x-large')
+			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], 'Resonance Lines', alp)
+			plt.legend(loc='upper right', fontsize='large')
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		elif r == len(rel):
+			ax2 = fig.add_subplot(len(rel),1,img+r, sharex=ax1)
+			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], 'Resonance Lines', alp)
+			plt.legend(loc='upper right', fontsize='large')
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		else:
+			ax2 = fig.add_subplot(len(rel),1,img+r, sharex=ax1)
+			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], 'Resonance Lines', alp)
+			plt.legend(loc='upper right', fontsize='large')
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+
 
 	plt.show()
+
 
 
 	velocity_distributions(vdisp_lines, clouds, bin_disp, cloud_labels, '%s: Dispersion'%(lo_res_ID))
