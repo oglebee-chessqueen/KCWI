@@ -20,7 +20,7 @@ import numpy.polynomial.polynomial as poly
 from scipy.optimize import curve_fit
 from scipy.optimize import leastsq
 from scipy.ndimage.filters import gaussian_filter
-from scipy.stats import ks_2samp, ttest_ind
+from scipy.stats import ks_2samp, ttest_ind, kde
 import scipy.ndimage
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['axes.facecolor']='white'
@@ -586,7 +586,7 @@ def velocity_info_single(parms, cen, c):
 
 
 
-def velocity_distributions(velocity, regions, bin, legend, title, alp):
+def velocity_distributions(velocity, regions, bin, legend, color, alp):
 	'''
 	Use the results from the Gaussian fits over high S/N regions to find
 	the distribution of velocities over different regions in the image.
@@ -600,23 +600,59 @@ def velocity_distributions(velocity, regions, bin, legend, title, alp):
 	velocity[numpy.isinf(velocity)] = 5000000
 	velocity[numpy.isnan(velocity)] = 5000000
 
-	#~ fig = plt.figure(figsize=(8,8))
-	#~ fig.set_rasterized(True)
-	#~ ax1 = fig.add_subplot(1,1,1)
-	#~ ax1.set_rasterized(True)
-	#~ ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
-	#~ ax1.set_title(title, weight='bold', size='xx-large')
+	regs = legend
 
-	#~ clr = ['blue','green','red','yellow']		# [NI]
-	#~ clr = ['blue','green','cyan']		# [OI]
-	#~ clr = ['teal']#'purple']		# [OII]
-	#~ clr = ['magenta']		# HeII
-	#~ clr = ['deepskyblue','magenta']		# Hbeta
-	#~ clr = ['limegreen','orange']		# [OIII]
+	for reg in range(0,1): #numpy.size(regs)):	#regions[:,0])):
+		if numpy.size(regions) == 4:
+			y1 = regions[0]
+			y2 = regions[2]
+			x1 = regions[1]
+			x2 = regions[3]
+		else:
+			y1 = regions[reg,0]
+			y2 = regions[reg,2]
+			x1 = regions[reg,1]
+			x2 = regions[reg,3]
+		# For when multiple lines are read into this function:
+		if velocity.ndim > 2:
+			vel_hist = numpy.zeros( [(numpy.size(velocity[0,y1:y2,0])*numpy.size(velocity[0,0,x1:x2])),numpy.size(velocity[:,0,0])] )
+			for i in range(0,numpy.size(velocity[:,0,0])):
+				vel_hist[:,i] = velocity[i,y1:y2,x1:x2].flatten()
+			plt.hist(vel_hist, bin, align='mid', histtype='step', stacked='True', fill='True', density=True,
+							 alpha=alp, label=legend, linewidth=5)
+			vel = velocity[:,y1:y2,x1:x2].flatten()
+		# Just one emission line at once
+		else:
+			vel = velocity[y1:y2,x1:x2].flatten()
+			plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
+							 alpha=alp, color=color, label=legend, linewidth=5)
+
+	if numpy.any(vel < 0):
+		plt.axvline(x=v_m57, color='black', linestyle='dashed', lw=3)#, label='M57')
+	#~ plt.legend(loc='upper right', fontsize='large')
+	#~ ax = plt.gca()
+	#~ ax.axes.get_yaxis().set_ticks([])
+	#~ plt.savefig('m57_[OI]_Velocity_histogram.pdf',rasterized=True)		# this looks bad as eps; save as PDF
+	#~ plt.show()
+	return
+
+
+
+def velocity_distributions_smoothed(velocity, regions, bin, legend, color, alp):
+	'''
+	Use the results from the Gaussian fits over high S/N regions to find
+	the distribution of velocities over different regions in the image.
+	Find the distribution of velocities per region with their own histograms.
+	Region array is 2D, where: [ Region 1:[x1, y1, x2, y2],
+								 Region 2:[x1, y1, x2, y2],
+								....
+								 Region N:[x1, y1, x2, y2] ]
+	'''
+	# Take out nans and infs
+	velocity[numpy.isinf(velocity)] = 5000000
+	velocity[numpy.isnan(velocity)] = 5000000
 	regs = legend	#['Cloud 1','Cloud 2','Cloud 3','Cloud 4']
-	#~ alp = [0.3, 0.4, 0.5, 0.6]
-	#~ print numpy.size(regions)
-	# Loop through each box and make a histogram of velocity distribution
+	xx = numpy.arange(-100,100,1)
 
 	for reg in range(0,1): #numpy.size(regs)):	#regions[:,0])):
 		if numpy.size(regions) == 4:
@@ -635,14 +671,14 @@ def velocity_distributions(velocity, regions, bin, legend, title, alp):
 			vel_hist = numpy.zeros( [(numpy.size(velocity[0,y1:y2,0])*numpy.size(velocity[0,0,x1:x2])),numpy.size(velocity[:,0,0])] )
 			for i in range(0,numpy.size(velocity[:,0,0])):
 				vel_hist[:,i] = velocity[i,y1:y2,x1:x2].flatten()
-			plt.hist(vel_hist, bin, align='mid', histtype='step', stacked='True', fill='True', density=True,
-							 alpha=alp, label=legend, linewidth=5)
+			density = kde.gaussian_kde(vel_hist)
+			plt.plot(xx, density(xx), color=color, label=legend, linewidth=5)
 			vel = velocity[:,y1:y2,x1:x2].flatten()
 		# Just one emission line at once
 		else:
 			vel = velocity[y1:y2,x1:x2].flatten()
-			plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
-							 alpha=alp, label=legend, linewidth=5)
+			density = kde.gaussian_kde(vel)
+			plt.plot(xx, density(xx), color=color, label=legend, linewidth=5)
 
 	if numpy.any(vel < 0):
 		plt.axvline(x=v_m57, color='black', linestyle='dashed', lw=3)#, label='M57')
@@ -936,10 +972,11 @@ def low_res():
 	lo_res = [[3726.032, 3728.815], 3868.760, [4068.600, 4076.349], 4101.734, 4340.472,
 						4471.48, 4685.804, 4861.350, [4958.911, 5006.843],	#4713.15,
 						[5197.902, 5200.257], [5517.709, 5537.873]]#, 5577.339, [4562.6, 4571.1]]
-	lo_res_ID= ['[OII]','[NeIII]','[SII]','Hdelta','Hgamma',
-							'HeI','HeII','Hbeta','[OIII]',
+	lo_res_ID= ['[OII]','[NeIII]','[SII]',r'H$\delta$',r'H$\gamma$',
+							'HeI','HeII',r'H$\beta$','[OIII]',
 							'[NI]','[ClIII]']#,'[OI]','[MgI']
 	# Split into recombination and collision species
+	colors = ['red','darkorange','gold','forestgreen','mediumblue','darkviolet']
 	cel = [0,1,2,8,9,10]#,11,12]	#  collisonally-excited
 	rel = [3,4,5,6,7]	# recombination
 	# TEST
@@ -1053,7 +1090,7 @@ def low_res():
 						velocity_lines[line,i,j] = vel
 						vdisp_lines[line,i,j] = disp
 
-	bin = numpy.linspace(-100,100,100)
+	bin = numpy.linspace(-100,100,40)
 	bin_disp =  numpy.linspace(0,200,80)
 	#~ print velocity_lines[0,:,:]
 	#~ print
@@ -1118,21 +1155,29 @@ def low_res():
 		if c == 0:
 			ax1 = fig.add_subplot(len(cel),1,1)
 			ax1.set_title('Collisionally-Excited Lines', weight='bold', size='x-large')
-			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], 'Collisionally-Excited Lines', alp)
+			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
 			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
-		elif c == len(cel):
+		elif c == len(cel)-1:
 			ax2 = fig.add_subplot(len(cel),1,img+c, sharex=ax1)
 			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
-			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], 'Collisionally-Excited Lines', alp)
+			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
 			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
+			fig.subplots_adjust(hspace=0)
+			plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
 		else:
 			ax2 = fig.add_subplot(len(cel),1,img+c, sharex=ax1)
-			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], 'Collisionally-Excited Lines', alp)
+			velocity_distributions(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
 			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
 
@@ -1146,30 +1191,34 @@ def low_res():
 		if r == 0:
 			ax1 = fig.add_subplot(len(rel),1,1)
 			ax1.set_title('Resonance Lines', weight='bold', size='x-large')
-			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], 'Resonance Lines', alp)
+			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], colors[r], alp)
 			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
-		elif r == len(rel):
+		elif r == len(rel)-1:
 			ax2 = fig.add_subplot(len(rel),1,img+r, sharex=ax1)
 			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
-			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], 'Resonance Lines', alp)
+			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], colors[r], alp)
 			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
+			fig.subplots_adjust(hspace=0)
+			plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
 		else:
 			ax2 = fig.add_subplot(len(rel),1,img+r, sharex=ax1)
-			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], 'Resonance Lines', alp)
+			velocity_distributions(velocity_lines[rel[r],:,:], clouds, bin, lo_res_ID[rel[r]], colors[r], alp)
 			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
-
 
 	plt.show()
 
 
 
-	velocity_distributions(vdisp_lines, clouds, bin_disp, cloud_labels, '%s: Dispersion'%(lo_res_ID))
+	velocity_distributions(vdisp_lines, clouds, bin_disp, lo_res_ID, colors[r], alp)
 	#~ velocity_distributions_sameregion(velocity_lines, clouds, bin, lo_res_ID, '[NI] 5197+5200: Cloud Velocities')
 	#~ velocity_distributions_sameregion(vdisp_lines, clouds, bin_disp, lo_res_ID, '[NI] 5197+5200: Cloud Dispersion')
 
