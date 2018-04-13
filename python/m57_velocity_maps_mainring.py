@@ -1091,7 +1091,7 @@ def low_res():
 						vdisp_lines[line,i,j] = disp
 
 	bin = numpy.linspace(-100,100,40)
-	bin_disp =  numpy.linspace(0,200,80)
+	bin_disp =  numpy.linspace(0,200,100)
 	#~ print velocity_lines[0,:,:]
 	#~ print
 	#~ print velocity_lines[1,:,:]
@@ -1214,14 +1214,21 @@ def low_res():
 			ax = plt.gca()
 			ax.axes.get_yaxis().set_ticks([])
 
-	plt.show()
+	#~ plt.show()
 
-
-
-	velocity_distributions(vdisp_lines, clouds, bin_disp, lo_res_ID, colors[r], alp)
+	fig = plt.figure(figsize=(8,8))
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_title('Dispersion', weight='bold', size='x-large')
+	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+	alp = 0.3
+	img = 1
+	velocity_distributions(vdisp_lines, clouds, bin_disp, lo_res_ID, colors, alp)
 	#~ velocity_distributions_sameregion(velocity_lines, clouds, bin, lo_res_ID, '[NI] 5197+5200: Cloud Velocities')
 	#~ velocity_distributions_sameregion(vdisp_lines, clouds, bin_disp, lo_res_ID, '[NI] 5197+5200: Cloud Dispersion')
-
+	plt.legend(loc='upper left', fontsize='large')
+	ax = plt.gca()
+	ax.axes.get_yaxis().set_ticks([])
+	plt.show()
 	#~ ks_test(velocity_lines, clouds[0,:], clouds[1,:], bin, [cloud_labels[0],cloud_labels[1]])
 	#~ ks_test(velocity_lines, clouds[0,:], clouds[2,:], bin, [cloud_labels[0],cloud_labels[2]])
 	#~ ks_test(velocity_lines, clouds[1,:], clouds[2,:], bin, [cloud_labels[1],cloud_labels[2]])
