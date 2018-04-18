@@ -575,10 +575,14 @@ def velocity_info_single(parms, cen, c):
 	vr = numpy.zeros( numpy.size(cen) )			# km/s
 	vdisp = numpy.zeros( numpy.size(cen) )		# convert to km/s
 	for l in range(0, len(parms[:,0])):
-		vr[l] = ((parms[l,1] - cen[l]) / cen[l])*c
-		vdisp[l] = abs(2.3548*parms[l,2])*(c/cen[l])		# in wavelength (Ang) units --> km/s
-		if (vr[l]<-500) or (vr[l]>500):
+		if (parms[l,1] == cen[l]) and (parms[l,2] <= 0):
 			vr[l] = -numpy.inf
+			vdisp[l] = -numpy.inf
+		else:
+			vr[l] = ((parms[l,1] - cen[l]) / cen[l])*c
+			vdisp[l] = abs(2.3548*parms[l,2])*(c/cen[l])		# in wavelength (Ang) units --> km/s
+			if (vr[l]<-500) or (vr[l]>500):
+				vr[l] = -numpy.inf
 		#~ if vdisp[l]>150:
 			#~ vdisp[l] = -numpy.inf	#0
 
@@ -618,13 +622,13 @@ def velocity_distributions(velocity, regions, bin, legend, color, alp):
 			vel_hist = numpy.zeros( [(numpy.size(velocity[0,y1:y2,0])*numpy.size(velocity[0,0,x1:x2])),numpy.size(velocity[:,0,0])] )
 			for i in range(0,numpy.size(velocity[:,0,0])):
 				vel_hist[:,i] = velocity[i,y1:y2,x1:x2].flatten()
-			plt.hist(vel_hist, bin, align='mid', histtype='step', stacked='True', fill='True', density=True,
+			plt.hist(vel_hist, bin, align='mid', histtype='step', fill='True', #density=True, stacked='True',
 							 alpha=alp, label=legend, linewidth=5)
 			vel = velocity[:,y1:y2,x1:x2].flatten()
 		# Just one emission line at once
 		else:
 			vel = velocity[y1:y2,x1:x2].flatten()
-			plt.hist(vel, bin, align='mid', histtype='step', stacked='True', fill='True', #density=True,
+			plt.hist(vel, bin, align='mid', histtype='step', fill='True', #density=True, stacked='True',
 							 alpha=alp, color=color, label=legend, linewidth=5)
 
 	if numpy.any(vel < 0):
@@ -842,8 +846,6 @@ def low_res():
 	hi_res_ID = ['HeII','HI','[OIII]','[OIII]']
 	hi_res = [4685.804, 4861.350, 4958.911, 5006.843]
 
-	lo_res_ID = ['[OII]','[OII]']
-	lo_res = [3726.032, 3728.815]
 
 	#~ lo_res = [5197.902, 5200.257]
 	#~ lo_res_ID= ['[NI]','[NI]']
@@ -861,81 +863,7 @@ def low_res():
 	#~ intfile1 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,int)
 	#~ file1 = path+dir+date+dir+redux+dir+intfile1
 	#~ varfile1 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,var)
-	#~ vfile1 = path+dir+date+dir+redux+dir+varfile1
-
-	#~ intfile2 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index3,index4,int)
-	intfile2 = 'kb'+date+'_00%03i_%s.fits' % (index3,int)
-	file2 = path+dir+date+dir+redux+dir+intfile2
-	#~ varfile2 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index3,index4,var)
-	varfile2 = 'kb'+date+'_00%03i_%s.fits' % (index3,var)
-	vfile2 = path+dir+date+dir+redux+dir+varfile2
-
-
-	# Read in file, get important data from files
-	#~ data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1,1)		# data in units erg cm-2 s-1
-	data2, waves2, ra, dec, all_ra, all_dec = open_fits(file2,1)		# data in units erg cm-2 s-1
-	waves2 = waves2 - 0.25		# offset in lines from BH2
-	#~ var1, varwv1 = open_fits_err(vfile1)
-	var2, varwv2 = open_fits_err(vfile2)
-
-	# Do things here
-	ra_cen = ra - (ra_ref-ra)-0.00394
-	dec_cen = dec - (dec_ref-dec)+0.00292
-	all_ra = (all_ra - ra_cen)*3600.
-	all_dec = (all_dec - dec_cen)*3600.
-
-	#~ data1 = data1[:,32:-31,12:-12]
-	#~ var1 = var1[:,32:-31,12:-12]
-	data2 = data2[:,32:-30,11:-12]
-	var2 = var2[:,32:-30,11:-12]
-	all_dec = all_dec[32:-31]
-	all_ra = all_ra[12:-12]
-	print numpy.shape(data2)
-
-	clouds = [0,0,130,22]
-	cloud_labels = ['Main Ring']
-
-	# Do things here
-	# A) find velocity behavior of lower-res data sets ([OII])
-	# 1. Define emission line(s) to define velocity maps
-	lines = lo_res	#hi_res[0]
-	dlam = 5. 		# +/- extra wavelength coverage from min/max of lines
-	wv_range = numpy.where((waves2 > (numpy.min(lines)-dlam)) & (waves2 < (numpy.max(lines)+dlam)))[0]
-	#~ wv_range = numpy.where((waves1 > 5060) & (waves1 < 5300))[0]
-	waves_lines = waves2[wv_range]
-	data_lines = data2[wv_range,:,:]
-	var_lines = var2[wv_range,:,:]
-
-	flux_nocont = numpy.zeros( numpy.shape(data_lines) )
-
-	# 2. Loop through each image pixel to do continuu subtraction
-	for i in range(0,numpy.size(data_lines[0,:,0])):
-		for j in range(0,numpy.size(data_lines[0,0,:])):
-			flux_nocont[:,i,j] = subtract_continuum(waves_lines,data_lines[:,i,j])
-
-	# 3. Define S/N ration cut
-	sigma = 10			# 2.75 - good with var
-	#~ sigma = 2.5#2.2#33
-	data_cut = sn_cut(flux_nocont, var_lines, sigma)
-	data_cut_contours = gaussian_filter(numpy.sum(data_cut,axis=0), 1.0)
-
-	levels = [30,80,93,110,130]
-	lw = [1,2,3,4,5]
-	#~ fig2 = plt.figure(figsize=(8,8))
-	#~ ax1 = fig2.add_subplot(1,2,1)
-	#~ ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
-	#~ ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='x-large')
-	#~ ax1.set_title(lo_res_ID[0],weight='bold',size='x-large')
-	#~ CS2 = plt.contour(data_cut_contours, levels,
-					 #~ linewidths=lw, colors='white', #corner_mask=True,
-					 #~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ plt.imshow(numpy.sum(data_cut,axis=0), cmap='nipy_spectral', origin='lower', #aspect='auto')#,	#cmap='gnuplot'
-				#~ #vmin = 30, vmax = 190,
-				#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-	#~ ax = plt.gca()
-	#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
-	#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
-
+	#~ vfile1 = path+dir+date+dir+redux+dir+varfile
 
 	intfile2 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index3,index4,int)
 	file2 = path+dir+date+dir+redux+dir+intfile2
@@ -963,6 +891,9 @@ def low_res():
 	all_dec = all_dec[32:-31]
 	all_ra = all_ra[12:-12]
 
+	clouds = [0,0,130,22]
+	cloud_labels = ['Main Ring']
+
 	# Loop through all lines to make a large velocity/dispersion array for
 	# a bunch of lines at once
 	# ALL LINES
@@ -970,15 +901,19 @@ def low_res():
 							#~ 'HeI','HeII','Hbeta','[OIII]','[OIII]',
 							#~ '[NI]','[NI]','[ClIII]','[ClIII]']
 	lo_res = [[3726.032, 3728.815], 3868.760, [4068.600, 4076.349], 4101.734, 4340.472,
-						4471.48, 4685.804, 4861.350, [4958.911, 5006.843],	#4713.15,
+						4471.48, 4685.804, 4861.350, 4958.911, 5006.843, #[4958.911, 5006.843],	#4713.15,
 						[5197.902, 5200.257], [5517.709, 5537.873]]#, 5577.339, [4562.6, 4571.1]]
 	lo_res_ID= ['[OII]','[NeIII]','[SII]',r'H$\delta$',r'H$\gamma$',
-							'HeI','HeII',r'H$\beta$','[OIII]',
+							'HeI','HeII',r'H$\beta$','[OIII]','[OIII]',
 							'[NI]','[ClIII]']#,'[OI]','[MgI']
 	# Split into recombination and collision species
-	colors = ['red','darkorange','gold','forestgreen','mediumblue','darkviolet']
+	colors = ['red','gold','forestgreen','mediumblue','darkviolet','darkorange','silver']
+	# Collisional vs recombination
 	cel = [0,1,2,8,9,10]#,11,12]	#  collisonally-excited
 	rel = [3,4,5,6,7]	# recombination
+	# Same sampling in high-res data set as low-res
+	cel = [0,1,2,10,11,3,4]#,11,12]	#  low-res sampling only
+	rel = [6,7,5,8,9]	# also sampled in high-res
 	# TEST
 	#~ lo_res = [3868.760, 4068.600, 4101.734, 4340.472,
 						#~ 4713.15, 4685.804, 4861.350, 5006.843, 5517.709]
@@ -990,27 +925,10 @@ def low_res():
 	#~ cel = [0,1,2]
 	#~ rel = [3,4]
 
-	#~ lo_res = [5197.902, 5200.257]
-	#~ lo_res_ID= ['[NI]','[NI]']
-	#~ lo_res = [4068.600]#, 4076.349]
-	#~ lo_res_ID= ['[SII]']#,'[SII]']
-	#~ lo_res = [5517.709, 5537.873]
-	#~ lo_res_ID= ['[ClIII]','[ClIII]']
-	#~ lo_res = [3868.760]
-	#~ lo_res_ID= ['[NeIII]']
-	#~ lo_res = [4340.472]
-	#~ lo_res_ID= ['Hgam']
-	#~ lo_res = [4861.350]
-	#~ lo_res_ID= ['Hbeta']
-	#~ lo_res = [4101.734]
-	#~ lo_res_ID= ['Hdelta']
-	#~ lo_res_ID = ['[OII]','[OII]']
-	#~ lo_res = [3726.032, 3728.815]
-
 
 	lines = lo_res	#hi_res[0]
-	velocity_lines = numpy.zeros( [len(lines),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
-	vdisp_lines = numpy.zeros( [len(lo_res_ID),numpy.size(data_cut[0,:,0]),numpy.size(data_cut[0,0,:])] )
+	velocity_lines = numpy.zeros( [len(lines),numpy.size(data2[0,:,0]),numpy.size(data2[0,0,:])] )
+	vdisp_lines = numpy.zeros( [len(lo_res_ID),numpy.size(data2[0,:,0]),numpy.size(data2[0,0,:])] )
 
 	# Loop through the lines
 	for line in range(0,len(lines)):
@@ -1031,20 +949,6 @@ def low_res():
 		# 3. Define S/N ration cut
 		sigma = 10		# 2.75 - good with var
 		data_cut = sn_cut(flux_nocont, var_lines, sigma)
-
-		#~ ax1 = fig2.add_subplot(1,2,2)
-		#~ ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
-		#~ ax1.set_title(lo_res_ID[line],weight='bold',size='x-large')
-		#~ CS2 = plt.contour(data_cut_contours, levels,
-					 #~ linewidths=lw, colors='white', #corner_mask=True,
-					 #~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-		#~ plt.imshow(numpy.sum(data_cut,axis=0), cmap='nipy_spectral', origin='lower', #aspect='auto')#,	#cmap='gnuplot'
-				#~ #vmin = 30, vmax = 190,
-				#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
-		#~ ax = plt.gca()
-		#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
-		#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
-		#~ plt.show()
 
 		#~ # 4. Fit Gaussian profile(s) to line(s) of interest
 		for i in range(0,numpy.size(data_lines[0,:,0])):
@@ -1183,6 +1087,9 @@ def low_res():
 
 	#~ plt.show()
 	# REL
+	bin = numpy.linspace(-100,100,100)
+	#~ bin_disp =  numpy.linspace(0,50,50)
+
 	fig = plt.figure(figsize=(8,8))
 	alp = 0.5
 	img = 1
@@ -1216,18 +1123,88 @@ def low_res():
 
 	#~ plt.show()
 
+	#~ cel = [0,1,2,8,9,10,11]#,11,12]	#  collisonally-excited
+	#~ rel = [3,4,5,6,7]	# recombination
+
+	#~ fig = plt.figure(figsize=(8,8))
+	#~ ax1 = fig.add_subplot(2,1,1)
+	#~ ax1.set_title('Dispersion', weight='bold', size='x-large')
+	#~ ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+	#~ alp = 0.3
+	#~ img = 1
+	#~ velocity_distributions(vdisp_lines, clouds, bin_disp, lo_res_ID, colors, alp)
+	#~ plt.legend(loc='upper left', fontsize='large')
+	#~ ax = plt.gca()
+	#~ ax.axes.get_yaxis().set_ticks([])
+
+
+
 	fig = plt.figure(figsize=(8,8))
-	ax1 = fig.add_subplot(1,1,1)
-	ax1.set_title('Dispersion', weight='bold', size='x-large')
-	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
-	alp = 0.3
+	alp = 0.5
 	img = 1
-	velocity_distributions(vdisp_lines, clouds, bin_disp, lo_res_ID, colors, alp)
-	#~ velocity_distributions_sameregion(velocity_lines, clouds, bin, lo_res_ID, '[NI] 5197+5200: Cloud Velocities')
-	#~ velocity_distributions_sameregion(vdisp_lines, clouds, bin_disp, lo_res_ID, '[NI] 5197+5200: Cloud Dispersion')
-	plt.legend(loc='upper left', fontsize='large')
-	ax = plt.gca()
-	ax.axes.get_yaxis().set_ticks([])
+	for c in range(0,len(cel)):
+		# CEL
+		if c == 0:
+			ax1 = fig.add_subplot(len(cel),1,1)
+			ax1.set_title('Collisionally-Excited Lines', weight='bold', size='x-large')
+			velocity_distributions(vdisp_lines[cel[c],:,:], clouds, bin_disp, lo_res_ID[cel[c]], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(0,200)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		elif c == len(cel)-1:
+			ax2 = fig.add_subplot(len(cel),1,img+c, sharex=ax1)
+			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+			velocity_distributions(vdisp_lines[cel[c],:,:], clouds, bin_disp, lo_res_ID[cel[c]], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(0,200)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+			fig.subplots_adjust(hspace=0)
+			plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+		else:
+			ax2 = fig.add_subplot(len(cel),1,img+c, sharex=ax1)
+			velocity_distributions(vdisp_lines[cel[c],:,:], clouds, bin_disp, lo_res_ID[cel[c]], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[cel[c],:,:], clouds, bin, lo_res_ID[cel[c]], colors[c], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(0,200)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+
+
+	fig = plt.figure(figsize=(8,8))
+	alp = 0.5
+	img = 1
+	for r in range(0,len(rel)):
+		# RL
+		if r == 0:
+			ax1 = fig.add_subplot(len(rel),1,1)
+			ax1.set_title('Resonance Lines', weight='bold', size='x-large')
+			velocity_distributions(vdisp_lines[rel[r],:,:], clouds, bin_disp, lo_res_ID[rel[r]], colors[r], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(0,200)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		elif r == len(rel)-1:
+			ax2 = fig.add_subplot(len(rel),1,img+r, sharex=ax1)
+			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+			velocity_distributions(vdisp_lines[rel[r],:,:], clouds, bin_disp, lo_res_ID[rel[r]], colors[r], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(0,200)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+			fig.subplots_adjust(hspace=0)
+			plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+		else:
+			ax2 = fig.add_subplot(len(rel),1,img+r, sharex=ax1)
+			velocity_distributions(vdisp_lines[rel[r],:,:], clouds, bin_disp, lo_res_ID[rel[r]], colors[r], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(0,200)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+
 	plt.show()
 	#~ ks_test(velocity_lines, clouds[0,:], clouds[1,:], bin, [cloud_labels[0],cloud_labels[1]])
 	#~ ks_test(velocity_lines, clouds[0,:], clouds[2,:], bin, [cloud_labels[0],cloud_labels[2]])
@@ -1238,6 +1215,213 @@ def low_res():
 	#~ ks_test(vdisp_lines, clouds[1,:], clouds[2,:], bin, [cloud_labels[1],cloud_labels[2]])
 
 	return
+
+
+
+
+def hi_res():
+	'''
+	Use to look at 04/12 data sets (co-added for max S/N) low-resolution files
+	(212, 213)
+	'''
+	############### Main Ring (inner edge) ##################
+	c = 3.0E5
+	# Line list
+	HI = [4101.73, 4340.47, 4861.35]  	# delta, gamma, beta
+	HeI = [3888.65, 3972.02, 4026.19, 4471.48, 4713.15, 4921.93, 5015.68]
+	HeII = [4540, 4685.804, 5411.50]
+	NI = [5197.902, 5200.257]
+	OII = [3726.032, 3728.815]
+	OIII = [4363.209, 4958.911, 5006.843]
+
+	date='170412'
+
+	int = 'icubes'
+	var = 'vcubes'
+
+	index1=210		# spectral range: 4650 - 5050
+	index2=211		#
+	index3=212		# spectral range: 3600 - 5500
+	index4=213		#
+
+	intfile1 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,int)
+	file1 = path+dir+date+dir+redux+dir+intfile1
+	varfile1 = 'kb'+date+'_00%03i+00%03i_%s_coadd.fits' % (index1,index2,var)
+	vfile1 = path+dir+date+dir+redux+dir+varfile1
+
+
+	# Read in file, get important data from files
+	data1, waves1, ra, dec, all_ra, all_dec = open_fits(file1,1)		# data in units erg cm-2 s-1
+	var1, varwv1 = open_fits_err(vfile1)
+
+	# Do things here
+	ra_cen = ra - (ra_ref-ra)-0.00394
+	dec_cen = dec - (dec_ref-dec)+0.00292
+	all_ra = (all_ra - ra_cen)*3600.
+	all_dec = (all_dec - dec_cen)*3600.
+
+	data1 = data1[:,32:-31,12:-12]
+	var1 = var1[:,32:-31,12:-12]
+	all_dec = all_dec[32:-31]
+	all_ra = all_ra[12:-12]
+
+	clouds = [0,0,130,22]
+	cloud_labels = ['Main Ring']
+
+	# Loop through all lines to make a large velocity/dispersion array for
+	# a bunch of lines at once
+	# ALL LINES
+	hi_res_ID = ['HeII 4686',r'H$\beta$','[OIII] 4959','[OIII] 5007', 'HeI 5015']
+	hi_res_ID = ['HeII',r'H$\beta$','HeI','[OIII] 4959','[OIII] 5007']
+	hi_res = [4685.804, 4861.350, 5015.678, 4958.911, 5006.843]
+	# Split into recombination and collision species
+	colors = ['red','gold','forestgreen','mediumblue','darkviolet']
+	#~ cel = [2]	#  collisonally-excited
+	#~ rel = [0,1,3]	# recombination
+
+	lines = hi_res
+	velocity_lines = numpy.zeros( [len(lines),numpy.size(data1[0,:,0]),numpy.size(data1[0,0,:])] )
+	vdisp_lines = numpy.zeros( [len(hi_res_ID),numpy.size(data1[0,:,0]),numpy.size(data1[0,0,:])] )
+
+	# Loop through the lines
+	for line in range(0,len(lines)):
+		if line == 2:
+			dlam = 1.5
+			sigma = 1		# 2.75 - good with var
+			#~ wv_range = numpy.where((waves1 > (numpy.min(lines[line])-dlam)) & (waves1 < (numpy.max(lines[line])+3*dlam)))[0]
+		else:
+			dlam = 5. 		# +/- extra wavelength coverage from min/max of lines
+			sigma = 10		# 2.75 - good with var
+		wv_range = numpy.where((waves1 > (numpy.min(lines[line])-dlam)) & (waves1 < (numpy.max(lines[line])+dlam)))[0]
+		waves_lines = waves1[wv_range]
+		data_lines = data1[wv_range,:,:]
+		var_lines = var1[wv_range,:,:]
+
+		flux_nocont = numpy.zeros( numpy.shape(data_lines) )
+
+		# 2. Loop through each image pixel to do continuu subtraction
+		for i in range(0,numpy.size(data_lines[0,:,0])):
+			for j in range(0,numpy.size(data_lines[0,0,:])):
+				flux_nocont[:,i,j] = subtract_continuum(waves_lines,data_lines[:,i,j])
+
+		# 3. Define S/N ration cut
+
+		data_cut = sn_cut(flux_nocont, var_lines, sigma)
+
+		#~ fig2 = plt.figure(figsize=(8,8))
+		#~ ax1 = fig2.add_subplot(1,1,1)
+		#~ ax1.set_xlabel(r'$\Delta \alpha$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+		#~ ax1.set_ylabel(r'$\Delta \delta$ ($^{\prime \prime}$)',weight='bold',size='x-large')
+		#~ ax1.set_title(hi_res_ID[line],weight='bold',size='x-large')
+		#~ plt.imshow(numpy.sum(data_cut,axis=0), cmap='nipy_spectral', origin='lower', #aspect='auto')#,	#cmap='gnuplot'
+					#~ #vmin = 65, vmax = 150,
+					#~ extent=[all_ra[0],all_ra[-1],all_dec[0],all_dec[-1]])
+		#~ ax = plt.gca()
+		#~ ax.get_xaxis().get_major_formatter().set_useOffset(False)
+		#~ ax.get_yaxis().get_major_formatter().set_useOffset(False)
+		#~ plt.show()
+
+		#~ # 4. Fit Gaussian profile(s) to line(s) of interest
+		for i in range(0,numpy.size(data_lines[0,:,0])):
+			for j in range(0,numpy.size(data_lines[0,0,:])):
+				if numpy.sum(data_cut[:,i,j]) <= 0:
+					print "No lines detected at [%i,%i]" % (i,j)
+					#for ww in range(0,len(lines)):
+					velocity_lines[line,i,j] = -numpy.inf
+					vdisp_lines[line,i,j] = -numpy.inf
+					continue
+				else:
+					# Define amplitude, st. dev, and parameter array for Gaussfit
+					dwave = 1
+					if type(lines[line]) == list:	#len(lines[line]) == 2:		# for doublet lines
+						#~ print "Doublet lines."
+						amp_lines = define_amplitudes(lines[line], waves_lines, data_cut[:,i,j], dwave)
+						linestdv = numpy.ones( numpy.size(waves_lines) )*0.5 	# Std. dev. array w/ guess:
+						gauss_parms = define_parms(lines[line], amp_lines, linestdv)
+
+						# fit gaussian profile(s) to the line(s)
+						# get the list of best-fit parameters back
+						popt = gaussfit(gauss_parms, waves_lines, data_cut[:,i,j])
+						popt = popt.reshape((len(popt)/3,3))
+
+						# Determine velocity (v_r) and dispersion (fwhm) of each line
+						vel, disp = velocity_info_doublet(popt, lines[line], c)
+						#~ vel, disp = velocity_info_single(popt, [lines[line]], c)
+						velocity_lines[line,i,j] = numpy.ma.average(vel)	#,axis=0
+						vdisp_lines[line,i,j] = numpy.ma.average(disp)		#,axis=0
+					else:													# for single lines
+						amp_lines = define_amplitudes([lines[line]], waves_lines, data_cut[:,i,j], dwave)
+						linestdv = numpy.ones( numpy.size(waves_lines) )*0.5 	# Std. dev. array w/ guess:
+						gauss_parms = define_parms([lines[line]], amp_lines, linestdv)
+
+						# fit gaussian profile(s) to the line(s)
+						# get the list of best-fit parameters back
+						popt = gaussfit(gauss_parms, waves_lines, data_cut[:,i,j])
+						popt = popt.reshape((len(popt)/3,3))
+
+						# Determine velocity (v_r) and dispersion (fwhm) of each line
+						#~ vel, disp = velocity_info_doublet(popt, lines, c)
+						vel, disp = velocity_info_single(popt, [lines[line]], c)
+						velocity_lines[line,i,j] = vel
+						vdisp_lines[line,i,j] = disp
+
+	bin = numpy.linspace(-100,100,100)
+	bin_disp =  numpy.linspace(0,50,50)
+
+	# 1. radial velocity (projected motion)
+	# Split up histrograms into individual histograms, stacked
+	fig = plt.figure(figsize=(8,8))
+	alp = 0.5
+	img = 1
+	# ALL LINES
+	for c in range(0,len(hi_res_ID)):
+		if c == 0:
+			ax1 = fig.add_subplot(len(hi_res_ID),1,1)
+			ax1.set_title('High-Res', weight='bold', size='x-large')
+			velocity_distributions(velocity_lines[c,:,:], clouds, bin, hi_res_ID[c], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[c,:,:], clouds, bin, hi_res_ID[c], colors[c], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+		elif c == len(hi_res_ID)-1:
+			ax2 = fig.add_subplot(len(hi_res_ID),1,img+c, sharex=ax1)
+			ax2.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+			velocity_distributions(velocity_lines[c,:,:], clouds, bin, hi_res_ID[c], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[c,:,:], clouds, bin, hi_res_ID[c], colors[c], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+			fig.subplots_adjust(hspace=0)
+			plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+		else:
+			ax2 = fig.add_subplot(len(hi_res_ID),1,img+c, sharex=ax1)
+			velocity_distributions(velocity_lines[c,:,:], clouds, bin, hi_res_ID[c], colors[c], alp)
+			#~ velocity_distributions_smoothed(velocity_lines[c,:,:], clouds, bin, hi_res_ID[c], colors[c], alp)
+			plt.legend(loc='upper right', fontsize='large')
+			plt.xlim(-75,50)
+			ax = plt.gca()
+			ax.axes.get_yaxis().set_ticks([])
+
+	#~ plt.show()
+
+	fig = plt.figure(figsize=(8,8))
+	ax1 = fig.add_subplot(1,1,1)
+	ax1.set_title('Dispersion', weight='bold', size='x-large')
+	ax1.set_xlabel('Velocity (km/s)', weight='bold', size='x-large')
+	alp = 0.3
+	img = 1
+	velocity_distributions(vdisp_lines, clouds, bin_disp, hi_res_ID, colors, alp)
+	#~ velocity_distributions_sameregion(velocity_lines, clouds, bin, lo_res_ID, '[NI] 5197+5200: Cloud Velocities')
+	#~ velocity_distributions_sameregion(vdisp_lines, clouds, bin_disp, lo_res_ID, '[NI] 5197+5200: Cloud Dispersion')
+	plt.legend(loc='upper right', fontsize='large')
+	ax = plt.gca()
+	ax.axes.get_yaxis().set_ticks([])
+	plt.show()
+
+	return
+
 
 
 
@@ -1277,3 +1461,4 @@ if __name__ == "__main__":
 
 	# Functions to run high and low resolution data to find v_r and v_disp
 	low_res()
+	hi_res()
