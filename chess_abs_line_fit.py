@@ -74,11 +74,12 @@ def onedgaussian(wave,flux,err,dwave):
 	# Find chi2 of the gaussian with the theta parameters
 	gaussian = []
 	area_under_gaussian = 0.0
+	dx = (x[-1]-x[0])/len(x)
 
 	for i in range(0,len(y)):
 		gauss_fnct = theta[0] + theta[1]*math.exp( (-1)*( (x[i]-theta[2])**2 )/( 2*theta[3]**2 ))
-		area_under_gaussian += (1.0 - gauss_fnct)
-		print x[-1]-x[0], gauss_fnct, area_under_gaussian*(x[-1]-x[0])
+		area_under_gaussian += (1.0 - gauss_fnct)*dx
+		print dx, gauss_fnct, area_under_gaussian#*(x[-1]-x[0])
 		gaussian.append( gauss_fnct )
 
 
@@ -141,15 +142,18 @@ def open_txt(filename,plot_title):
 		flux.append( float(column[1]) )
 		err.append( float(column[2]) )
 
+	flux = savgol_filter(flux,3,1)
+
 	# Print img quick to see star pattern
-	pylab.errorbar(wave,flux,yerr=err,errorevery=100,color='k',ecolor='k',elinewidth=3)
-	pylab.xlabel('Wavelength (Ang)')
-	pylab.ylabel('Flux (ergs/cm^2/s/Ang)')
-	pylab.xlim(1170,1350)
-	#~ pylab.ylim(0,1.4E-10)
-	pylab.title(plot_title)
-	pylab.grid('on')
-	pylab.show()
+	#~ pylab.errorbar(wave,flux,yerr=err,errorevery=100,color='k',ecolor='k',
+								 #~ drawstyle='steps-mid',elinewidth=3)
+	#~ pylab.xlabel('Wavelength (Ang)')
+	#~ pylab.ylabel('Flux (ergs/cm^2/s/Ang)')
+	#~ pylab.xlim(1170,1350)
+	#pylab.ylim(0,1.4E-10)
+	#~ pylab.title(plot_title)
+	#~ pylab.grid('on')
+	#~ pylab.show()
 
 	return wave, flux, err
 
@@ -163,6 +167,8 @@ if __name__=='__main__':
 	from matplotlib.colors import LogNorm
 	import numpy as num
 	from scipy.integrate import simps
+	from scipy.signal import savgol_filter
+	import matplotlib.pyplot as plt
 
 	# Constants
 	c_kms = 3.*10**5		# speed of light, km s-1
@@ -180,7 +186,7 @@ if __name__=='__main__':
 	#~ plot_title = 'HD 37061 UV Spectrum - HST/STIS E140H'
 	ref_path = "C:\\Users\\Keri Hoadley\\Documents\\CHESS\\CHESS2_flight\\"
 	filename = "epsPer_1dspectr_v2_256res_Aeffcorr.dat"   # Make sure this is the fixed image using idl
-	filename = "iue\\ePer_IUE.dat"   # Make sure this is the fixed image using idl
+	#~ filename = "iue\\ePer_IUE.dat"   # Make sure this is the fixed image using idl
 	plot_title = 'e Per: CHESS-2'
 
 	# Open the fits file, returning the 2d image array in the specified resolution
@@ -190,17 +196,20 @@ if __name__=='__main__':
 	flux = num.array(flux)
 	err = num.array(err)
 
+
 	# Neutral carbon lines, in Angstroms
 	CI_waves = [1334.53, 1335.71]#[1193.031, 1277.245]	# Lines within STIS spectrum
 	f_osc = [0.129, 0.115]	#[0.0409, 0.0923]      # oscillator strength for each line
 	dAng = 5.0		# +/- dAng around the CI lines
+	Ion = ['C II','C II']
 
-	CI_index = 0
+	CI_index = 1# 0
 	CI_wave = CI_waves[CI_index]
+	Ion_title = Ion[CI_index]
 	CI_title = str(CI_wave)
 	f_osc = f_osc[CI_index]
 
-	print 'Cross section for C I line at',CI_title,'Ang = ',sig0*f_osc
+	print 'Cross section for ',Ion_title,' ',CI_title,' Ang = ',sig0*f_osc
 	print
 
 	# Find indices where wave is between CI_waves +/- dAng
@@ -224,7 +233,7 @@ if __name__=='__main__':
 	pylab.ylabel('Flux (ergs/cm^2/s/Ang)')
 	pylab.xlim(CI_wave-dAng, CI_wave+dAng)
 	#~ pylab.ylim(0,1.4E-10)
-	pylab.title('HD 37061 - CI Absorption line at '+CI_title+' Ang')
+	pylab.title('ePer - '+Ion_title+' '+CI_title+' Ang')
 	pylab.grid('on')
 
 
@@ -252,8 +261,8 @@ if __name__=='__main__':
 	pylab.xlabel('Wavelength (Ang)')
 	pylab.ylabel('Normalized flux')
 	pylab.xlim(CI_wave-dAng, CI_wave+dAng)
-	pylab.ylim(-0.1,1.2)
-	pylab.title('HD 37061 - Normalized CI Absorption line at '+CI_title+' Ang')
+	pylab.ylim(-0.1,1.4)
+	pylab.title('ePer - '+Ion_title+' '+CI_title+' Ang')
 	pylab.grid('on')
 	pylab.show()
 
@@ -265,22 +274,23 @@ if __name__=='__main__':
 		abs_vel[i] = vel*c_kms
 
 	# Plot again, in velocity space
-	pylab.errorbar(abs_vel,norm_flux,yerr=norm_err,errorevery=10,color='k',ecolor='k',elinewidth=3)
-	pylab.plot((-500,500),(0,0),'r--',linewidth=5)
-	pylab.plot((-500,500),(1,1),'r--',linewidth=5)
-	pylab.plot( (0,0),(-0.5,1.5),'g--',linewidth=5 )
-	pylab.xlabel('Velocity (km/s)')
-	pylab.ylabel('Normalized flux')
-	pylab.xlim(-200,200)
-	pylab.ylim(-0.1,1.2)
-	pylab.title('HD 37061 - Normalized CI Absorption line at '+CI_title+' Ang')
-	pylab.grid('on')
-	pylab.show()
+	#~ pylab.errorbar(abs_vel,norm_flux,yerr=norm_err,errorevery=10,color='k',ecolor='k',elinewidth=3)
+	#~ pylab.plot((-500,500),(0,0),'r--',linewidth=5)
+	#~ pylab.plot((-500,500),(1,1),'r--',linewidth=5)
+	#~ pylab.plot( (0,0),(-0.5,1.5),'g--',linewidth=5 )
+	#~ pylab.xlabel('Velocity (km/s)')
+	#~ pylab.ylabel('Normalized flux')
+	#~ pylab.xlim(-200,200)
+	#~ pylab.ylim(-0.1,1.2)
+	#~ pylab.title('ePer - Normalized '+Ion_title+' '+CI_title+' Ang')
+	#~ pylab.grid('on')
+	#~ pylab.show()
 
 	# Line center (1277) at ~ 27.5 km s-1
 	# Line cneter (1193) at ~ 20.0 km s-1
 
-	v_shift = [0,0]	#[20.0, 27.5]		# km/s, for each line
+	v_shift = [-25,0]	#[20.0, 27.5]		# km/s, for each line
+	v_shift = [0,25]
 	v_shift = v_shift[CI_index]
 
 	# Fit a Gaussian absorption line to the spectra for the CI line
@@ -314,12 +324,12 @@ if __name__=='__main__':
 	# for Gaussian fitting routine
 	# Then plot to check absorption line and enough continuum
 	# is in the view
-	abs_vel = abs_vel[i_start:i_end]
-	abs_wave = abs_wave[i_start:i_end]
-	norm_flux = norm_flux[i_start:i_end]
-	norm_err = norm_err[i_start:i_end]
+	abs_vel_fit = abs_vel[i_start:i_end]
+	abs_wave_fit = abs_wave[i_start:i_end]
+	norm_flux_fit = norm_flux[i_start:i_end]
+	norm_err_fit = norm_err[i_start:i_end]
 
-	pylab.errorbar(abs_vel,norm_flux,yerr=norm_err,errorevery=5,color='k',ecolor='k',elinewidth=3)
+	pylab.errorbar(abs_vel_fit,norm_flux_fit,yerr=norm_err_fit,errorevery=5,color='k',ecolor='k',elinewidth=3)
 	pylab.plot((-500,500),(0,0),'r--',linewidth=5)
 	pylab.plot((-500,500),(1,1),'r--',linewidth=5)
 	pylab.plot( (0,0),(-0.5,1.5),'g--',linewidth=5 )
@@ -327,47 +337,60 @@ if __name__=='__main__':
 	pylab.ylabel('Normalized flux')
 	#~ pylab.xlim(-40,80)
 	#~ pylab.ylim(-0.05,1.05)
-	pylab.title('HD 37061 - Normalized CI Absorption line at '+CI_title+' Ang')
+	pylab.title('ePer - Normalized '+Ion_title+' '+CI_title+' Ang')
 	pylab.grid('on')
 	pylab.show()
 
 	# Now, use Gaussian fitting function to find a best-fit
 	# absorption line to sum up all counts
-	theta, gaussian, area_under_gaussian = onedgaussian(abs_vel,norm_flux,norm_err,v_shift)
+	theta, gaussian, area_under_gaussian = onedgaussian(abs_vel_fit,norm_flux_fit,norm_err_fit,v_shift)
 
 	# Using the area_under_gaussian, find the equivalen with
 	# in wavelength space
 	# Try finding area using num.trapz and scipy.integrate.simps
-	trapz_area = num.trapz(gaussian,dx=200)
-	simps_area = simps(gaussian,dx=200)
-	print "Area (trap) = ", trapz_area
-	print "Area (simp) = ", simps_area
 	equiv_width = area_under_gaussian           # W = (dwave) * 1.0 (normalized)
-	equiv_width_ang = equiv_width**2*CI_wave/c_kms
+	equiv_width_ang = equiv_width*CI_wave/c_kms
 	print
 	print 'Area under the Gaussian: ',area_under_gaussian
-	print 'Equivalent width: ',equiv_width**2.,' km/s --> ',equiv_width_ang,' Angstoms'
+	print 'Equivalent width: ',equiv_width,' km/s --> ',equiv_width_ang*10**3,' mA'
 
 	# Solve for the column density: N_CI = equiv_width / (wave**2 * sig0 * f_osc)
 	############ FOR tau << 1 (Linear Curve of Growth) ###############
-	N_CI = equiv_width**2 / (sig0*f_osc*CI_wave*CI_wave)
+	N_CI = equiv_width / (sig0*f_osc*CI_wave*CI_wave)
 	print
-	print 'Column density of C I from absorption line at ',CI_title,' = ',N_CI,' cm-2'
+	print 'Column density of '+Ion_title+' ',CI_title,' = ',N_CI,' cm-2'
 
 	dv = theta[2]
 
-	pylab.errorbar(abs_vel,norm_flux,yerr=norm_err,errorevery=5,color='k',ecolor='k',elinewidth=3)
-	pylab.plot(abs_vel,gaussian,'b--',lw=3)
-	pylab.plot((-500,500),(0,0),'r--',linewidth=5)	# plot 1, 0 normalized lines
-	pylab.plot((-500,500),(1,1),'r--',linewidth=5)
-	pylab.plot((dv+equiv_width**2.,dv+equiv_width**2.),(-0.5,1.5),'g--',linewidth=2)	# Plot +ve equiv width
-	pylab.plot((dv-equiv_width**2.,dv-equiv_width**2.),(-0.5,1.5),'g--',linewidth=2)	# Plot -ve equiv width
-	pylab.xlabel('Velocity (km/s)')
+	dCI_wave = CI_wave + dv*CI_wave/c_kms
+
+	fig, ax = plt.subplots()
+
+	ax.errorbar(abs_wave,norm_flux,yerr=norm_err,errorevery=5,color='k',ecolor='k',elinewidth=3,drawstyle='steps-mid')
+	ax.plot(abs_wave_fit,gaussian,'b--',lw=5)
+	ax.plot((CI_wave-5,CI_wave+5),(0,0),'r--',linewidth=3)	# plot 1, 0 normalized lines
+	ax.plot((CI_wave-5,CI_wave+5),(1,1),'r--',linewidth=3)
+	#~ pylab.plot((-500,500),(0,0),'r--',linewidth=5)	# plot 1, 0 normalized lines
+	#~ pylab.plot((-500,500),(1,1),'r--',linewidth=5)
+	x0 = dCI_wave+equiv_width_ang/2
+	x1 = dCI_wave-equiv_width_ang/2
+	ax.fill( [x0,x1,x1,x0], [0,0,1,1], fill=False, color='green', edgecolor='black', alpha=0.8, hatch='//')
+	ax.plot((dCI_wave+equiv_width_ang/2,dCI_wave+equiv_width_ang/2),(0,1.),'g--',linewidth=2)	# Plot +ve equiv width
+	ax.plot((dCI_wave-equiv_width_ang/2,dCI_wave-equiv_width_ang/2),(0,1.),'g--',linewidth=2)	# Plot -ve equiv width
+	#~ pylab.plot((dv+equiv_width,dv+equiv_width),(-0.5,1.5),'g--',linewidth=2)	# Plot +ve equiv width
+	#~ pylab.plot((dv-equiv_width,dv-equiv_width),(-0.5,1.5),'g--',linewidth=2)	# Plot -ve equiv width
+	pylab.xlabel('Wavelength ($\AA$)')
+	#~ pylab.xlabel('Velocity (km/s)')
 	pylab.ylabel('Normalized flux')
 	#~ pylab.xlim(-40,80)
-	#~ pylab.ylim(-0.01,1.05)
-	pylab.title('Best-fit Gaussian absorption line over CI Absorption line at '+CI_title+' Ang')
-	pylab.grid('on')
+	pylab.ylim(-0.01,1.25)
+	pylab.xlim(CI_wave-2,CI_wave+2)
+	#~ pylab.title('Best-fit Gaussian absorption line over CI Absorption line at '+CI_title+' Ang')
+	pylab.title(Ion_title+' '+CI_title)
+#	pylab.text(CI_wave-4., 1.1, "EW = "+str(equiv_width_ang)+" Ang", size=16,
+#						va="baseline", ha="left",
+#						bbox=dict(fc="none"))
+	#~ pylab.grid('on')
 	pylab.show()
 
 
